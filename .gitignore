@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.log
+venv/
+.venv/
+env/
+.DS_Store
+results.json
+*.json
+data/
+instance/
+.dev-runner.pid

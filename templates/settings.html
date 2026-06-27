@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Funpay Parser — Настройки</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="bg-shapes"></div>
+    <canvas id="stars" class="stars-canvas"></canvas>
+    <div class="glow-layer">
+        <div class="parallax" data-speed="0.02">
+            <div class="shape shape-1"></div>
+        </div>
+        <div class="parallax" data-speed="0.04">
+            <div class="shape shape-3"></div>
+        </div>
+        <div class="parallax" data-speed="0.03">
+            <div class="shape shape-2"></div>
+        </div>
+        <div class="parallax" data-speed="0.05">
+            <div class="shape shape-4"></div>
+        </div>
+        <div class="parallax" data-speed="0.06">
+            <div class="shape shape-5"></div>
+        </div>
+    </div>
+    <div class="app">
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="4"/>
+                        <path d="M3 9h18"/>
+                        <path d="M9 21V9"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Настройки</h1>
+                    <p class="subtitle">Конфигурация API ключей</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary btn-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Вернуться к парсеру
+                </a>
+            </div>
+        </header>
+
+        <main class="main">
+            <section class="section reveal" style="animation-delay: 0.05s;">
+                <div class="section-header">
+                    <div class="section-label">Fireworks API</div>
+                </div>
+                <div class="card" style="max-width: 640px;">
+                    <div class="field">
+                        <label for="fireworks-key">Fireworks API ключ</label>
+                        <input type="password" id="fireworks-key" class="input" placeholder="Введите Fireworks API ключ">
+                        <div id="key-status" class="hint" style="margin-top: 6px;"></div>
+                        <div class="hint" style="margin-top: 4px; color: var(--text-3);">
+                            Ключ используется для классификации лотов через LLM.
+                        </div>
+                    </div>
+                    <div class="actions" style="margin-top: 16px;">
+                        <button id="save-key-btn" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const keyInput = document.getElementById('fireworks-key');
+        const saveKeyBtn = document.getElementById('save-key-btn');
+        const keyStatus = document.getElementById('key-status');
+        const toast = document.getElementById('toast');
+
+        function showToast(message, isError = false) {
+            toast.textContent = message;
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        async function loadSettings() {
+            try {
+                const resp = await fetch('/api/settings');
+                if (!resp.ok) throw new Error('Failed to load settings');
+                const data = await resp.json();
+                if (data.has_key) {
+                    keyStatus.textContent = 'Ключ установлен: ' + data.fireworks_api_key;
+                    keyStatus.style.color = 'var(--success)';
+                } else {
+                    keyStatus.textContent = 'Ключ не настроен.';
+                    keyStatus.style.color = 'var(--error)';
+                }
+            } catch (err) {
+                keyStatus.textContent = 'Не удалось загрузить статус ключа.';
+                keyStatus.style.color = 'var(--error)';
+            }
+        }
+
+        saveKeyBtn.addEventListener('click', async () => {
+            const key = keyInput.value.trim();
+            if (!key) {
+                if (!confirm('Оставить поле пустым удалит текущий ключ. Продолжить?')) return;
+            }
+            try {
+                const resp = await fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fireworks_api_key: key }),
+                });
+                if (!resp.ok) throw new Error('Failed to save settings');
+                const data = await resp.json();
+                keyInput.value = '';
+                if (data.has_key) {
+                    keyStatus.textContent = 'Ключ сохранён.';
+                    keyStatus.style.color = 'var(--success)';
+                } else {
+                    keyStatus.textContent = 'Ключ удалён.';
+                    keyStatus.style.color = 'var(--error)';
+                }
+                showToast('Настройки сохранены');
+            } catch (err) {
+                showToast('Ошибка сохранения настроек', true);
+            }
+        });
+
+        loadSettings();
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
