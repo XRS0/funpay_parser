@@ -57,7 +57,7 @@ func Load() Config {
 		DataDir:           dataDir,
 		SettingsFile:      filepath.Join(dataDir, "settings.json"),
 		RunStateFile:      filepath.Join(dataDir, "run_state.json"),
-		DatabasePath:      getenv("DATABASE_PATH", "parser.db"),
+		DatabasePath:      getenv("DATABASE_PATH", filepath.Join(dataDir, "parser.db")),
 		LLMProvider:       getenv("LLM_PROVIDER", "fireworks"),
 		FireworksKey:      os.Getenv("FIREWORKS_API_KEY"),
 		FireworksModel:    getenv("FIREWORKS_MODEL", "accounts/fireworks/models/llama-v3p1-70b-instruct"),
