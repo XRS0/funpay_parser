@@ -566,6 +566,14 @@ function ProfileModal({ profile, onClose, onSaved, showToast }) {
 }
 
 function Modal({ title, children, footer, onClose, className = '' }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return <div className="modal visible"><div className="modal-overlay" onClick={onClose} /><div className={`modal-content ${className}`}><div className="modal-header"><h2 className="modal-title">{title}</h2><button className="modal-close" onClick={onClose}><X size={20} /></button></div><div className="modal-body">{children}</div><div className="modal-footer">{footer}</div></div></div>;
 }
 
