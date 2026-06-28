@@ -2349,3 +2349,60 @@ html {
   .profile-main-line { display: grid; gap: 3px; }
   .profile-main-line .profile-name { max-width: 100%; }
 }
+
+/* Profile size tune */
+.compact-list {
+  gap: 7px;
+}
+.compact-profile-card {
+  min-height: 60px;
+  padding: 10px 66px 10px 12px;
+  gap: 6px;
+  border-radius: 15px;
+  align-content: center;
+}
+.profile-main-line {
+  gap: 8px;
+  line-height: 1.25;
+}
+.profile-main-line .profile-name {
+  max-width: 38%;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+.profile-main-line .profile-query {
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+.profile-meta-row.compact {
+  gap: 5px;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.profile-meta-row.compact span {
+  padding: 3px 6px;
+}
+.compact-actions {
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  gap: 6px;
+}
+.profile-active-dot {
+  width: 7px;
+  height: 7px;
+}
+.compact-actions .profile-action-link {
+  width: 24px;
+  height: 24px;
+}
+.compact-actions .profile-action-link svg {
+  width: 13px;
+  height: 13px;
+}
+@media (max-width: 860px) {
+  .compact-profile-card {
+    min-height: 64px;
+    padding: 10px 62px 10px 12px;
+  }
+}
