@@ -16,9 +16,9 @@
     }, { passive: true });
 
     // Spring smoothing for the input values so the parallax never stops abruptly.
-    // damping < 1 gives a tiny overshoot / bounce on settle; higher damping = less bounce.
-    const spring = 0.08;
-    const damping = 0.92;
+    // Higher damping = less overshoot; spring controls how fast it follows input.
+    const spring = 0.06;
+    const damping = 0.96;
 
     function smoothInput() {
         const forceX = (mouseX - smoothMouseX) * spring;
@@ -48,8 +48,8 @@
         function animateParallax() {
             requestAnimationFrame(animateParallax);
             layers.forEach((layer) => {
-                const moveX = smoothMouseX * layer.speed * 80;
-                const moveY = smoothMouseY * layer.speed * 80 + smoothScrollY * layer.speed * 0.4;
+                const moveX = smoothMouseX * layer.speed * 60;
+                const moveY = smoothMouseY * layer.speed * 60 + smoothScrollY * layer.speed * 0.4;
                 layer.el.style.transform = `translate(${moveX}px, ${moveY}px)`;
             });
         }
@@ -132,8 +132,8 @@
         }
 
         function drawStar(s) {
-            const parallaxX = smoothMouseX * s.depth * 40;
-            const parallaxY = smoothMouseY * s.depth * 40 + smoothScrollY * s.depth * 0.3;
+            const parallaxX = smoothMouseX * s.depth * 35;
+            const parallaxY = smoothMouseY * s.depth * 35 + smoothScrollY * s.depth * 0.3;
             const x = (s.baseX + parallaxX + width) % width;
             const y = (s.baseY + parallaxY + height) % height;
 
