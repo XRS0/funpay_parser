@@ -219,6 +219,9 @@ func decode(r *http.Request, v any) { _ = json.NewDecoder(r.Body).Decode(v) }
 
 func (s *Server) progress(msg string) {
 	log.Println(msg)
+	if strings.HasPrefix(strings.TrimSpace(msg), "[LLM]") {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.Status = msg

@@ -442,16 +442,19 @@ function StatusPipeline({ progress, status }) {
     const messages = progress.map((p) => p.message || '');
     const joined = messages.join(' ');
     const llmDone = messages.filter((m) => /^\[LLM\]/.test(m.trim())).length;
+    const llmChecked = messages.map((m) => m.match(/LLM checked (\d+)\/(\d+)/i)).filter(Boolean).pop();
     const candidates =
-      joined.match(/Limited LLM candidates to (\d+)/)?.[1]
+      llmChecked?.[2]
+      || joined.match(/Limited LLM candidates to (\d+)/)?.[1]
       || joined.match(/Sending (\d+) filtered listings to LLM/)?.[1]
       || '0';
-    const summaryClassified = joined.match(/classified[\s\":]+(\d+)/i)?.[1];
+    const summaryClassified = joined.match(/classified[\s":]+(\d+)/i)?.[1];
+    const checked = Number(llmChecked?.[1] || llmDone || 0);
     return {
       listings: Number(joined.match(/Found (\d+) listings/)?.[1] || 0),
       candidates: Number(candidates),
-      classified: Number(summaryClassified || llmDone || 0),
-      llmDone,
+      classified: Number(summaryClassified || checked || 0),
+      llmDone: checked,
     };
   }, [progress]);
   const llmPercent = metrics.candidates > 0 ? Math.min(100, Math.round((metrics.classified / metrics.candidates) * 100)) : 0;

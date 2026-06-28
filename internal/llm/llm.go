@@ -87,6 +87,13 @@ func (c *Client) ClassifyMany(ctx context.Context, listings []models.Listing, wo
 	jobs := make(chan int)
 	out := make(chan models.Listing, len(listings))
 	var wg sync.WaitGroup
+	var doneMu sync.Mutex
+	done := 0
+	total := len(listings)
+	progressStep := total / 10
+	if progressStep < 1 {
+		progressStep = 1
+	}
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
@@ -107,7 +114,13 @@ func (c *Client) ClassifyMany(ctx context.Context, listings []models.Listing, wo
 					l.ClassificationReason = r.Reason
 				}
 				if progress != nil {
-					progress(fmt.Sprintf("[LLM] %s | type=%s", trim(l.Title, 50), value(l.AccountType)))
+					doneMu.Lock()
+					done++
+					current := done
+					doneMu.Unlock()
+					if current == 1 || current == total || current%progressStep == 0 {
+						progress(fmt.Sprintf("🧠 LLM checked %d/%d listings", current, total))
+					}
 				}
 				out <- l
 			}
@@ -132,16 +145,4 @@ func (c *Client) ClassifyMany(ctx context.Context, listings []models.Listing, wo
 }
 func prompt(l models.Listing) string {
 	return fmt.Sprintf("You are analyzing a Funpay marketplace listing for a ChatGPT account.\n\nTitle: %s\nDescription: %s\nPrice: %.2f %s\n\nAnswer: is ChatGPT Plus? account_type personal/shared/unknown? confidence 0.0-1.0. Respond ONLY valid JSON: {\"is_plus\": true|false, \"account_type\": \"personal\"|\"shared\"|\"unknown\", \"confidence\": 0.0, \"reason\": \"...\"}", l.Title, l.Description, l.Price, l.Currency)
-}
-func trim(s string, n int) string {
-	if len([]rune(s)) <= n {
-		return s
-	}
-	return string([]rune(s)[:n])
-}
-func value(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
 }
