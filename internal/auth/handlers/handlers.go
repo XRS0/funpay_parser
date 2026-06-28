@@ -112,6 +112,23 @@ func generateID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
+func telegramCode() string { return strings.ToUpper(generateID()[:10]) }
+
+func telegramDeepLink(botUsername, code string) string {
+	botUsername = strings.TrimPrefix(strings.TrimSpace(botUsername), "@")
+	if botUsername == "" || code == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://t.me/%s?start=%s", botUsername, code)
+}
+
+func telegramDisplayName(chat telegram.Chat) string {
+	if chat.Username != "" {
+		return chat.Username
+	}
+	return strings.TrimSpace(chat.FirstName + " " + chat.LastName)
+}
+
 func (h *Handler) ConfigInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
@@ -274,13 +291,75 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, user, 200)
 }
 
+func (h *Handler) TelegramLoginCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if h.botToken == "" {
+		jsonOut(w, map[string]string{"error": "telegram bot token is not configured"}, 400)
+		return
+	}
+	code := telegramCode()
+	expiresAt := time.Now().UTC().Add(10 * time.Minute)
+	if err := h.store.SaveTelegramLoginCode(r.Context(), code, expiresAt); err != nil {
+		jsonOut(w, map[string]string{"error": "failed to create telegram login code"}, 500)
+		return
+	}
+	botUsername := ""
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	if bot, err := telegram.NewWithProxy(h.botToken, h.botProxy).GetMe(ctx); err == nil {
+		botUsername = bot.Username
+	}
+	cancel()
+	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "start_command": "/start", "deep_link": telegramDeepLink(botUsername, code)}, 200)
+}
+
+func (h *Handler) TelegramConfirmLoginCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	var d struct {
+		Code string `json:"code"`
+	}
+	decode(r, &d)
+	if h.botToken == "" {
+		jsonOut(w, map[string]string{"error": "telegram bot token is not configured"}, 400)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+	chat, err := telegram.NewWithProxy(h.botToken, h.botProxy).FindStartCode(ctx, d.Code)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": err.Error()}, 404)
+		return
+	}
+	if err := h.store.ConsumeTelegramLoginCode(r.Context(), d.Code); err != nil {
+		jsonOut(w, map[string]string{"error": "telegram login code is expired or invalid"}, 400)
+		return
+	}
+	user, err := h.store.UpsertTelegramUser(r.Context(), chat.ID, chat.ID, telegramDisplayName(chat))
+	if err != nil {
+		jsonOut(w, map[string]string{"error": "failed to save telegram user"}, 500)
+		return
+	}
+	access, refresh, err := h.issueTokens(r.Context(), user)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": "failed to issue tokens"}, 500)
+		return
+	}
+	setRefreshCookie(w, refresh, h.cookieHost)
+	jsonOut(w, map[string]any{"user": user, "access_token": access}, 200)
+}
+
 func (h *Handler) TelegramLinkCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
 	}
 	claims := r.Context().Value("claims").(*jwt.Claims)
-	code := strings.ToUpper(generateID()[:10])
+	code := telegramCode()
 	expiresAt := time.Now().UTC().Add(15 * time.Minute)
 	if err := h.store.SaveTelegramLinkCode(r.Context(), claims.UserID, code, expiresAt); err != nil {
 		jsonOut(w, map[string]string{"error": "failed to create telegram link code"}, 500)
@@ -294,7 +373,7 @@ func (h *Handler) TelegramLinkCode(w http.ResponseWriter, r *http.Request) {
 		}
 		cancel()
 	}
-	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "start_command": "/start " + code}, 200)
+	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "start_command": "/start", "deep_link": telegramDeepLink(botUsername, code)}, 200)
 }
 
 func (h *Handler) TelegramConfirmCode(w http.ResponseWriter, r *http.Request) {
@@ -318,10 +397,7 @@ func (h *Handler) TelegramConfirmCode(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, map[string]string{"error": err.Error()}, 400)
 		return
 	}
-	username := chat.Username
-	if username == "" {
-		username = strings.TrimSpace(chat.FirstName + " " + chat.LastName)
-	}
+	username := telegramDisplayName(chat)
 	user, err := h.store.LinkTelegramByCode(r.Context(), d.Code, chat.ID, chat.ID, username)
 	if err != nil {
 		jsonOut(w, map[string]string{"error": err.Error()}, 400)
@@ -466,6 +542,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/auth/refresh", h.Refresh)
 	mux.HandleFunc("/api/auth/logout", h.Logout)
 	mux.HandleFunc("/api/auth/telegram/login", h.TelegramLogin)
+	mux.HandleFunc("/api/auth/telegram/login-code", h.TelegramLoginCode)
+	mux.HandleFunc("/api/auth/telegram/confirm-login-code", h.TelegramConfirmLoginCode)
 	mux.Handle("/api/auth/telegram/link", h.AuthMiddleware(http.HandlerFunc(h.TelegramLink)))
 	mux.Handle("/api/auth/profile", h.AuthMiddleware(http.HandlerFunc(h.UpdateProfile)))
 	mux.Handle("/api/auth/telegram/link-code", h.AuthMiddleware(http.HandlerFunc(h.TelegramLinkCode)))

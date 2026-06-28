@@ -3232,3 +3232,117 @@ body {
 @media (max-width: 480px) {
   .usage-grid { grid-template-columns: 1fr; }
 }
+
+/* Header v2: stable tabs + fixed profile chip */
+.app-header {
+  display: grid !important;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(160px, 1fr) !important;
+  align-items: center !important;
+  gap: 18px !important;
+  flex-wrap: nowrap !important;
+  width: min(100%, 1120px) !important;
+  margin: 0 auto 34px !important;
+  padding: 0 4px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.app-header .brand { min-width: 0; justify-self: start; }
+.header-actions {
+  justify-self: center !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.nav-btn {
+  min-height: 38px !important;
+  padding: 9px 13px !important;
+  border-radius: 14px !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: rgba(255,255,255,0.62) !important;
+  box-shadow: none !important;
+}
+.nav-btn::after { display: none !important; }
+.nav-btn:hover:not(.active) {
+  color: #fff !important;
+  background: rgba(255,255,255,0.055) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  transform: translateY(-1px) !important;
+}
+.nav-btn.active {
+  color: #fff !important;
+  background: rgba(255,255,255,0.09) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.24), 0 0 22px rgba(255,255,255,0.045) inset !important;
+  text-shadow: none !important;
+}
+.profile-chip {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 230px;
+  min-height: 40px;
+  padding: 8px 12px 8px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.86);
+  cursor: pointer;
+  transition: transform .16s ease, background .16s ease, border-color .16s ease, color .16s ease;
+}
+.profile-chip:hover,
+.profile-chip.active {
+  color: #fff;
+  background: rgba(255,255,255,0.095);
+  border-color: rgba(255,255,255,0.18);
+  transform: translateY(-1px);
+}
+.profile-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+.profile-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: .9rem;
+}
+@media (max-width: 900px) {
+  .app-header {
+    grid-template-columns: 1fr auto !important;
+    grid-template-areas: 'brand profile' 'tabs tabs';
+    row-gap: 14px !important;
+  }
+  .app-header .brand { grid-area: brand; }
+  .header-actions {
+    grid-area: tabs;
+    justify-self: start !important;
+    max-width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start !important;
+    scrollbar-width: none;
+  }
+  .header-actions::-webkit-scrollbar { display: none; }
+  .profile-chip { grid-area: profile; max-width: 190px; }
+}
+@media (max-width: 560px) {
+  .nav-btn { padding: 8px 10px !important; font-size: .84rem !important; }
+  .nav-btn svg { width: 16px; height: 16px; }
+  .profile-chip { max-width: 150px; }
+}

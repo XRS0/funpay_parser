@@ -59,6 +59,7 @@ func (s *Store) Init(ctx context.Context) error {
 			created_at TEXT DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id)`,
+		`CREATE TABLE IF NOT EXISTS telegram_login_codes (code TEXT PRIMARY KEY, expires_at TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
 	}
 	for _, st := range stmts {
 		if _, err := s.DB.ExecContext(ctx, st); err != nil {
@@ -178,6 +179,28 @@ func (s *Store) UpdateName(ctx context.Context, userID int64, name string) (User
 		return User{}, err
 	}
 	return s.GetUserByID(ctx, userID)
+}
+
+func (s *Store) SaveTelegramLoginCode(ctx context.Context, code string, expiresAt time.Time) error {
+	_, _ = s.DB.ExecContext(ctx, `DELETE FROM telegram_login_codes WHERE expires_at < ?`, time.Now().UTC().Format(time.RFC3339))
+	_, err := s.DB.ExecContext(ctx, `INSERT OR REPLACE INTO telegram_login_codes(code, expires_at, created_at) VALUES(?,?,?)`, strings.TrimSpace(code), expiresAt.UTC().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339))
+	return err
+}
+
+func (s *Store) ConsumeTelegramLoginCode(ctx context.Context, code string) error {
+	code = strings.TrimSpace(code)
+	row := s.DB.QueryRowContext(ctx, `SELECT expires_at FROM telegram_login_codes WHERE code=?`, code)
+	var exp string
+	if err := row.Scan(&exp); err != nil {
+		return err
+	}
+	expiresAt, _ := time.Parse(time.RFC3339, exp)
+	if !expiresAt.IsZero() && time.Now().UTC().After(expiresAt) {
+		_, _ = s.DB.ExecContext(ctx, `DELETE FROM telegram_login_codes WHERE code=?`, code)
+		return fmt.Errorf("telegram login code expired")
+	}
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM telegram_login_codes WHERE code=?`, code)
+	return err
 }
 
 func (s *Store) SaveTelegramLinkCode(ctx context.Context, userID int64, code string, expiresAt time.Time) error {

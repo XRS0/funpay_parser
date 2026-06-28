@@ -384,8 +384,11 @@ function Header({ title = 'Funpay Parser', subtitle = 'мабой', user }) {
         <NavButton to='/saved' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
         <NavButton to='/scheduler' icon={<Clock size={18} />} active={path === '/scheduler'}>Расписание</NavButton>
         <NavButton to='/settings' icon={<SettingsIcon size={18} />} active={path === '/settings'}>Настройки</NavButton>
-        <button type='button' className={`btn btn-secondary btn-sm nav-btn profile-nav ${path === '/profile' ? 'active' : ''}`} onClick={() => { if (path !== '/profile') navigate('/profile'); }} aria-current={path === '/profile' ? 'page' : undefined}><UserCircle size={18} />{user?.name || user?.email || 'Профиль'}</button>
       </nav>
+      <button type='button' className={`profile-chip ${path === '/profile' ? 'active' : ''}`} onClick={() => { if (path !== '/profile') navigate('/profile'); }} aria-current={path === '/profile' ? 'page' : undefined}>
+        <span className='profile-chip-icon'><UserCircle size={18} /></span>
+        <span className='profile-chip-name'>{user?.name || user?.email || 'Профиль'}</span>
+      </button>
     </header>
   );
 }
@@ -783,36 +786,68 @@ function SchedulerPage({ showToast }) {
 function TelegramLinkPanel({ account, showToast, onLinked }) {
   const [linkInfo, setLinkInfo] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollTimer = useRef(null);
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current) window.clearInterval(pollTimer.current);
+    pollTimer.current = null;
+    setPolling(false);
+  }, []);
+  useEffect(() => () => stopPolling(), [stopPolling]);
+
+  const confirmCode = useCallback(async (code, silent = false) => {
+    if (!code) return false;
+    try {
+      const user = await api('/api/auth/telegram/confirm-code', { method: 'POST', body: JSON.stringify({ code }), authRedirect: false });
+      stopPolling();
+      setLinkInfo(null);
+      onLinked?.(user);
+      showToast('Telegram привязан');
+      return true;
+    } catch (err) {
+      if (!silent) showToast(err.message, true);
+      return false;
+    }
+  }, [onLinked, showToast, stopPolling]);
+
+  const startPolling = useCallback((code) => {
+    stopPolling();
+    setPolling(true);
+    let attempts = 0;
+    pollTimer.current = window.setInterval(async () => {
+      attempts += 1;
+      const ok = await confirmCode(code, true);
+      if (ok || attempts >= 45) stopPolling();
+    }, 2000);
+  }, [confirmCode, stopPolling]);
+
+  const openTelegram = (d) => {
+    if (d?.deep_link) window.open(d.deep_link, '_blank', 'noopener,noreferrer');
+  };
+
   const createCode = async () => {
     setBusy(true);
     try {
       const d = await api('/api/auth/telegram/link-code', { method: 'POST', authRedirect: false });
       setLinkInfo(d);
-      showToast('Код Telegram создан');
+      openTelegram(d);
+      startPolling(d.code);
+      showToast('Открыл Telegram. Нажми Start в боте — сайт подхватит привязку сам.');
     } catch (err) { showToast(err.message, true); }
     finally { setBusy(false); }
   };
-  const confirm = async () => {
-    if (!linkInfo?.code) return;
-    setBusy(true);
-    try {
-      const user = await api('/api/auth/telegram/confirm-code', { method: 'POST', body: JSON.stringify({ code: linkInfo.code }), authRedirect: false });
-      setLinkInfo(null);
-      onLinked?.(user);
-      showToast('Telegram привязан');
-    } catch (err) { showToast(err.message, true); }
-    finally { setBusy(false); }
-  };
+
   return <div className='telegram-link-box'>
     <div>
       <div className='telegram-link-title'>{account?.telegram_chat_id ? 'Telegram привязан' : 'Привязка Telegram'}</div>
-      <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : account?.telegram_chat_id ? `Chat ID ${account.telegram_chat_id}` : 'Создай код, отправь его боту через /start и подтверди здесь.'}</div>
+      <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : account?.telegram_chat_id ? `Chat ID ${account.telegram_chat_id}` : 'Одна кнопка откроет бота. В Telegram нажми обычный Start, код передастся скрытым start-параметром.'}</div>
     </div>
     {linkInfo ? <div className='telegram-code-panel'>
-      <code>{linkInfo.start_command}</code>
-      <span>{linkInfo.bot_username ? `Бот: @${linkInfo.bot_username}` : 'Открой бота и отправь команду'}</span>
-      <button className='btn btn-primary btn-sm' disabled={busy} onClick={confirm}>Я отправил /start</button>
-    </div> : <button className='btn btn-secondary btn-sm' disabled={busy} onClick={createCode}>{account?.telegram_chat_id ? 'Перепривязать' : 'Получить код'}</button>}
+      <code>{linkInfo.start_command || '/start'}</code>
+      <span>{polling ? 'Жду Start в Telegram…' : 'Можно открыть бота ещё раз'}</span>
+      <button className='btn btn-secondary btn-sm' disabled={busy || !linkInfo.deep_link} onClick={() => openTelegram(linkInfo)}>Открыть Telegram</button>
+      <button className='btn btn-primary btn-sm' disabled={busy} onClick={() => confirmCode(linkInfo.code)}>Проверить</button>
+    </div> : <button className='btn btn-secondary btn-sm' disabled={busy} onClick={createCode}>{account?.telegram_chat_id ? 'Перепривязать Telegram' : 'Войти через Telegram'}</button>}
   </div>;
 }
 
@@ -1068,20 +1103,35 @@ function LoginPage({ onLogin, showToast }) {
   };
 
   const telegramLogin = async () => {
-    const tg = window.Telegram?.WebApp;
-    if (!tg?.initData) {
-      showToast(telegramEnabled ? 'Откройте приложение через Telegram WebApp' : 'Telegram-вход пока не настроен', true);
+    if (!telegramEnabled) {
+      showToast('Telegram-вход пока не настроен', true);
       return;
     }
     setLoading(true);
     try {
-      const data = await api('/api/auth/telegram/login', { method: 'POST', body: JSON.stringify({ init_data: tg.initData }), authRedirect: false });
-      setAuthToken(data.access_token);
-      onLogin();
+      const d = await api('/api/auth/telegram/login-code', { method: 'POST', authRedirect: false });
+      if (d.deep_link) window.open(d.deep_link, '_blank', 'noopener,noreferrer');
+      showToast('Открыл Telegram. Нажми Start в боте — вход завершится автоматически.');
+      let attempts = 0;
+      const timer = window.setInterval(async () => {
+        attempts += 1;
+        try {
+          const data = await api('/api/auth/telegram/confirm-login-code', { method: 'POST', body: JSON.stringify({ code: d.code }), authRedirect: false });
+          window.clearInterval(timer);
+          setAuthToken(data.access_token);
+          setLoading(false);
+          onLogin();
+        } catch {
+          if (attempts >= 45) {
+            window.clearInterval(timer);
+            setLoading(false);
+            showToast('Не дождался Start в Telegram. Попробуй ещё раз.', true);
+          }
+        }
+      }, 2000);
     } catch (err) {
-      showToast(err.message, true);
-    } finally {
       setLoading(false);
+      showToast(err.message, true);
     }
   };
 
