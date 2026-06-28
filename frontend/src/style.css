@@ -2466,3 +2466,117 @@ html {
   }
   .profile-main-line .profile-name { max-width: 100%; }
 }
+
+/* Darker scene, denser cards, and glow kept behind the UI */
+:root {
+  --bg: #050506;
+  --surface: #070708;
+  --surface-2: #0a0a0c;
+  --surface-3: #121216;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-2: rgba(255, 255, 255, 0.18);
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.82);
+}
+
+html,
+body {
+  background:
+    radial-gradient(circle at 50% 115%, rgba(18, 24, 48, 0.24) 0%, transparent 42%),
+    #050506;
+}
+
+.glow-layer {
+  z-index: 0;
+  opacity: 0.7;
+}
+
+.stars-canvas {
+  z-index: 1;
+}
+
+.app {
+  z-index: 2;
+}
+
+.shape {
+  filter: blur(135px);
+}
+
+.shape-1 {
+  opacity: 0.24;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.18) 0%, rgba(59, 130, 246, 0.09) 35%, transparent 70%);
+}
+
+.shape-2 {
+  opacity: 0.16;
+  background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.2) 0%, rgba(168, 85, 247, 0.07) 45%, transparent 70%);
+}
+
+.shape-3 {
+  opacity: 0.2;
+  background: radial-gradient(circle at 40% 40%, rgba(168, 85, 247, 0.22) 0%, rgba(59, 130, 246, 0.07) 40%, transparent 70%);
+}
+
+.shape-4 {
+  opacity: 0.2;
+  background: radial-gradient(circle at 40% 40%, rgba(34, 211, 238, 0.18) 0%, rgba(59, 130, 246, 0.06) 40%, transparent 70%);
+}
+
+.shape-5 {
+  opacity: 0.16;
+  background: radial-gradient(circle at 45% 45%, rgba(244, 63, 94, 0.14) 0%, rgba(168, 85, 247, 0.06) 40%, transparent 70%);
+}
+
+.bg-shapes::after {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.016) 0%, transparent 62%);
+}
+
+.card,
+.saved-card,
+.profile-card,
+.settings-edit-card,
+.settings-side-card,
+.selected-profile-panel,
+.profiles-empty-panel,
+.profiles-empty-compact,
+.modal-content {
+  background: rgba(10, 10, 12, 0.9);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.run-card,
+.status-card,
+.cheapest-card,
+.summary-card,
+.settings-edit-card,
+.saved-card,
+.profile-card,
+.compact-profile-card {
+  background: linear-gradient(180deg, rgba(14, 14, 17, 0.95), rgba(8, 8, 10, 0.91));
+}
+
+.profile-card:hover,
+.saved-card:hover,
+.card:hover,
+.compact-profile-card:hover {
+  background: linear-gradient(180deg, rgba(18, 18, 22, 0.97), rgba(10, 10, 12, 0.94));
+}
+
+.profile-card.active,
+.card-active,
+.compact-profile-card.active {
+  background: linear-gradient(180deg, rgba(22, 22, 26, 0.98), rgba(12, 12, 15, 0.95));
+}
+
+.input-icon,
+.field input,
+.form-input,
+.clean-input,
+select,
+.progress-terminal,
+.settings-readonly-grid div,
+.selected-profile-grid div {
+  background: rgba(5, 5, 7, 0.76);
+}
