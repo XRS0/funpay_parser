@@ -2,33 +2,53 @@
 (function () {
     'use strict';
 
-    // Parallax on mouse move for elements with .parallax
-    const parallaxElements = document.querySelectorAll('.parallax');
+    // Track mouse and scroll for the starfield and parallax layers
     let mouseX = 0, mouseY = 0, scrollY = 0;
+    document.addEventListener('mousemove', (e) => {
+        mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+        mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+    });
+    window.addEventListener('scroll', () => {
+        scrollY = window.scrollY;
+    }, { passive: true });
+
+    // Parallax on mouse move and scroll for elements with .parallax
+    // Uses spring physics so the shapes settle with a small bounce when input stops.
+    const parallaxElements = document.querySelectorAll('.parallax');
     if (parallaxElements.length) {
-        let ticking = false;
-        function updateParallax() {
-            parallaxElements.forEach((el) => {
-                const speed = parseFloat(el.dataset.speed) || 0.03;
-                const moveX = mouseX * speed * 60;
-                const moveY = mouseY * speed * 60 + scrollY * speed * 0.4;
-                el.style.transform = `translate(${moveX}px, ${moveY}px)`;
+        const layers = Array.from(parallaxElements).map((el) => ({
+            el,
+            speed: parseFloat(el.dataset.speed) || 0.03,
+            currentX: 0,
+            currentY: 0,
+            velocityX: 0,
+            velocityY: 0,
+        }));
+
+        const spring = 0.075;
+        const damping = 0.82; // damping < 1 creates a small overshoot/bounce
+
+        function animateParallax() {
+            requestAnimationFrame(animateParallax);
+            layers.forEach((layer) => {
+                const targetX = mouseX * layer.speed * 60;
+                const targetY = mouseY * layer.speed * 60 + scrollY * layer.speed * 0.4;
+
+                const forceX = (targetX - layer.currentX) * spring;
+                const forceY = (targetY - layer.currentY) * spring;
+
+                layer.velocityX += forceX;
+                layer.velocityY += forceY;
+                layer.velocityX *= damping;
+                layer.velocityY *= damping;
+
+                layer.currentX += layer.velocityX;
+                layer.currentY += layer.velocityY;
+
+                layer.el.style.transform = `translate(${layer.currentX}px, ${layer.currentY}px)`;
             });
-            ticking = false;
         }
-        document.addEventListener('mousemove', (e) => {
-            mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
-            mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
-            if (ticking) return;
-            ticking = true;
-            window.requestAnimationFrame(updateParallax);
-        });
-        window.addEventListener('scroll', () => {
-            scrollY = window.scrollY;
-            if (ticking) return;
-            ticking = true;
-            window.requestAnimationFrame(updateParallax);
-        }, { passive: true });
+        animateParallax();
     }
 
     // Scroll reveal for .reveal elements
