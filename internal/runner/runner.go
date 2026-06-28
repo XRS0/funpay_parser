@@ -26,6 +26,7 @@ type Options struct {
 	Deep          bool   `json:"deep"`
 	ScrapeWorkers int    `json:"scrape_workers"`
 	LLMWorkers    int    `json:"llm_workers"`
+	FunpayProxy   string `json:"funpay_proxy,omitempty"`
 }
 type Result struct {
 	Success    bool             `json:"success"`
@@ -67,6 +68,10 @@ func RunWithClassifier(ctx context.Context, cfg config.Config, opt Options, prog
 	}
 	if opt.LLMWorkers == 0 {
 		opt.LLMWorkers = 8
+	}
+	if opt.FunpayProxy != "" {
+		cfg.Proxy = opt.FunpayProxy
+		cfg.ProxyURL = config.ParseProxy(opt.FunpayProxy)
 	}
 	target := duration.ExtractTargetDuration(opt.Query)
 	s := scraper.New(cfg)

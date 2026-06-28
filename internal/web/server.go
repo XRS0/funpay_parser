@@ -152,6 +152,7 @@ func (s *Server) startRun(profileID any, opt runner.Options) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	opt.FunpayProxy = s.cfg.EffectiveFunpayProxy()
 	s.state = RunState{Running: true, Status: "Starting parser...", Progress: []map[string]string{}, StartedAt: time.Now().Format("15:04:05"), ProfileID: profileID}
 	s.mu.Unlock()
 	go func() {
@@ -283,6 +284,8 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			"telegram_bot_username":  botUsername,
 			"telegram_proxy":         set.TelegramProxy,
 			"telegram_proxy_active":  s.cfg.EffectiveTelegramProxyURL() != "",
+			"funpay_proxy":           set.FunpayProxy,
+			"funpay_proxy_active":    s.cfg.EffectiveFunpayProxyURL() != "",
 			"telegram_notifications": tgToken != "" && set.TelegramChatID != "",
 		})
 	}
@@ -312,6 +315,9 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, ok := d["telegram_proxy"]; ok {
 			set.TelegramProxy = orStr(d["telegram_proxy"], "")
+		}
+		if _, ok := d["funpay_proxy"]; ok {
+			set.FunpayProxy = orStr(d["funpay_proxy"], "")
 		}
 		_ = config.SaveSettings(s.cfg.SettingsFile, set)
 		respond()

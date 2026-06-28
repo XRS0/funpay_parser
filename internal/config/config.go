@@ -117,6 +117,7 @@ type Settings struct {
 	TelegramBotToken string `json:"telegram_bot_token,omitempty"`
 	TelegramChatID   string `json:"telegram_chat_id,omitempty"`
 	TelegramProxy    string `json:"telegram_proxy,omitempty"`
+	FunpayProxy      string `json:"funpay_proxy,omitempty"`
 }
 
 func LoadSettings(path string) Settings {
@@ -191,4 +192,16 @@ func (c Config) EffectiveTelegramProxyURL() string {
 		return NormalizeProxyURL(s.TelegramProxy)
 	}
 	return c.TelegramProxyURL
+}
+
+func (c Config) EffectiveFunpayProxy() string {
+	s := LoadSettings(c.SettingsFile)
+	if s.FunpayProxy != "" {
+		return s.FunpayProxy
+	}
+	return c.Proxy
+}
+
+func (c Config) EffectiveFunpayProxyURL() string {
+	return ParseProxy(c.EffectiveFunpayProxy())
 }

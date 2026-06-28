@@ -623,24 +623,29 @@ function SettingsPage({ showToast }) {
   const [tgToken, setTgToken] = useState('');
   const [tgChat, setTgChat] = useState('');
   const [tgProxy, setTgProxy] = useState('');
+  const [funpayProxy, setFunpayProxy] = useState('');
   const [editLLM, setEditLLM] = useState(false);
   const [editTelegram, setEditTelegram] = useState(false);
-  const load = useCallback(async () => { const d = await api('/api/settings'); setData(d); setProvider(d.llm_provider || 'fireworks'); setModel(d.llm_model || ''); setTgChat(d.telegram_chat_id || ''); setTgProxy(d.telegram_proxy || ''); }, []);
+  const [editFunpay, setEditFunpay] = useState(false);
+  const load = useCallback(async () => { const d = await api('/api/settings'); setData(d); setProvider(d.llm_provider || 'fireworks'); setModel(d.llm_model || ''); setTgChat(d.telegram_chat_id || ''); setTgProxy(d.telegram_proxy || ''); setFunpayProxy(d.funpay_proxy || ''); }, []);
   useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
   const saveLLM = async () => { if (!key && !window.confirm('Пустое поле удалит текущий ключ. Продолжить?')) return; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ llm_provider: provider, llm_model: model.trim(), llm_api_key: key.trim() }) }); setKey(''); setEditLLM(false); await load(); showToast('LLM сохранён'); } catch (err) { showToast(err.message, true); } };
   const saveTelegram = async () => { const body = { telegram_chat_id: tgChat.trim(), telegram_proxy: tgProxy.trim() }; const token = tgToken.trim(); if (token || window.confirm('Пустое поле token удалит текущий token. Продолжить?')) body.telegram_bot_token = token; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }); setTgToken(''); setEditTelegram(false); await load(); showToast('Telegram сохранён'); } catch (err) { showToast(err.message, true); } };
+  const saveFunpay = async () => { try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ funpay_proxy: funpayProxy.trim() }) }); setEditFunpay(false); await load(); showToast('Funpay proxy сохранён'); } catch (err) { showToast(err.message, true); } };
   const syncTelegram = async () => { try { const d = await api('/api/telegram/sync', { method: 'POST' }); setTgChat(d.chat_id || ''); await load(); showToast('Чат найден'); } catch (err) { showToast(err.message, true); } };
   const testTelegram = async () => { try { await api('/api/telegram/test', { method: 'POST' }); showToast('Тест отправлен'); } catch (err) { showToast(err.message, true); } };
   const llmReady = !!data?.has_key;
   const telegramReady = !!data?.telegram_notifications;
   const proxyReady = !!data?.telegram_proxy_active;
+  const funpayProxyReady = !!data?.funpay_proxy_active;
   return <>
     <Header title="Настройки" subtitle="LLM и Telegram" />
     <main className="main settings-page lean-settings">
       <section className="settings-summary-row reveal visible">
         <div className={`settings-pill ${llmReady ? 'ready' : ''}`}><KeyRound size={16} />LLM: {llmReady ? 'готов' : 'нет ключа'}</div>
         <div className={`settings-pill ${telegramReady ? 'ready' : ''}`}><Bot size={16} />Telegram: {telegramReady ? 'включён' : 'выключен'}</div>
-        <div className={`settings-pill ${proxyReady ? 'ready' : ''}`}><Wifi size={16} />Proxy: {proxyReady ? 'активен' : 'нет'}</div>
+        <div className={`settings-pill ${funpayProxyReady ? 'ready' : ''}`}><Route size={16} />Funpay proxy: {funpayProxyReady ? 'активен' : 'нет'}</div>
+        <div className={`settings-pill ${proxyReady ? 'ready' : ''}`}><Wifi size={16} />Telegram proxy: {proxyReady ? 'активен' : 'нет'}</div>
       </section>
 
       <section className="settings-edit-card reveal visible">
@@ -662,6 +667,25 @@ function SettingsPage({ showToast }) {
           </div>
           <Field label="API ключ"><input className="form-input clean-input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Новый ключ" /></Field>
           <div className="settings-actions"><button className="btn btn-primary" onClick={saveLLM}>Сохранить</button><button className="btn btn-ghost" onClick={() => { setEditLLM(false); setKey(''); load(); }}>Отмена</button></div>
+        </div>}
+      </section>
+
+
+      <section className="settings-edit-card reveal visible">
+        <div className="settings-edit-head">
+          <div>
+            <h2>Funpay</h2>
+            <div className="settings-readonly-grid">
+              <div><span>Proxy</span><strong>{funpayProxyReady ? (data?.funpay_proxy || 'env') : 'не задан'}</strong></div>
+              <div><span>Источник</span><strong>{data?.funpay_proxy ? 'настройки' : funpayProxyReady ? 'env PROXY' : '—'}</strong></div>
+              <div><span>Назначение</span><strong>только парсинг</strong></div>
+            </div>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setEditFunpay((v) => !v)}>{editFunpay ? 'Закрыть' : 'Изменить'}</button>
+        </div>
+        {editFunpay && <div className="settings-edit-body">
+          <Field label="Funpay proxy"><input className="form-input clean-input" value={funpayProxy} onChange={(e) => setFunpayProxy(e.target.value)} placeholder="socks5://127.0.0.1:10808" /></Field>
+          <div className="settings-actions"><button className="btn btn-primary" onClick={saveFunpay}>Сохранить</button><button className="btn btn-ghost" onClick={() => { setEditFunpay(false); load(); }}>Отмена</button></div>
         </div>}
       </section>
 
