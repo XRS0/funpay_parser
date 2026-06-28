@@ -1,3 +1,10 @@
+FROM node:25-bookworm AS frontend
+WORKDIR /src/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+
 FROM golang:1.25-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -12,8 +19,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/service /app/service
-COPY templates /app/templates
-COPY static /app/static
+COPY --from=frontend /src/frontend/dist /app/frontend/dist
 ENV DATA_DIR=/app/data
 ENV DATABASE_PATH=/app/data/parser.db
 ENV PORT=5000

@@ -95,11 +95,6 @@ func (s *Server) schedulerLoop() {
 }
 
 func (s *Server) routes() {
-	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	s.mux.HandleFunc("/", s.page("templates/index.html"))
-	s.mux.HandleFunc("/saved", s.page("templates/saved.html"))
-	s.mux.HandleFunc("/scheduler", s.page("templates/scheduler.html"))
-	s.mux.HandleFunc("/settings", s.page("templates/settings.html"))
 	s.mux.HandleFunc("/run", s.run)
 	s.mux.HandleFunc("/status", s.status)
 	s.mux.HandleFunc("/stop", s.stop)
@@ -113,25 +108,23 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/saved_results/", s.savedByID)
 	s.mux.HandleFunc("/api/schedules", s.schedules)
 	s.mux.HandleFunc("/api/schedules/", s.scheduleByID)
+	s.mux.HandleFunc("/", s.spa)
 }
-func (s *Server) page(path string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" && strings.Trim(r.URL.Path, "/") != strings.TrimSuffix(strings.TrimPrefix(path, "templates/"), ".html") {
-			http.NotFound(w, r)
-			return
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		html := string(b)
-		html = strings.ReplaceAll(html, `{{ url_for('static', filename='style.css') }}`, "/static/style.css")
-		html = strings.ReplaceAll(html, `{{ url_for('static', filename='app.js') }}`, "/static/app.js")
-		html = strings.ReplaceAll(html, `{{ url_for('static', filename='favicon.svg') }}`, "/static/favicon.svg")
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(html))
+
+func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/run" || r.URL.Path == "/status" || r.URL.Path == "/stop" || r.URL.Path == "/results" {
+		http.NotFound(w, r)
+		return
 	}
+	dist := "frontend/dist"
+	path := filepath.Join(dist, filepath.Clean(r.URL.Path))
+	if r.URL.Path != "/" {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			http.ServeFile(w, r, path)
+			return
+		}
+	}
+	http.ServeFile(w, r, filepath.Join(dist, "index.html"))
 }
 func jsonOut(w http.ResponseWriter, v any, code ...int) {
 	w.Header().Set("Content-Type", "application/json")

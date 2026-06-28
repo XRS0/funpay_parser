@@ -92,16 +92,19 @@ http://localhost:5000
 │   ├── scraper/                    # FunPay scraper + parallel page/deep fetch
 │   ├── store/                      # SQLite storage layer
 │   └── web/                        # API, UI routes, run state, scheduler loop
+├── frontend/                       # React/Vite SPA
+│   ├── src/                        # React-компоненты, страницы и стили
+│   └── public/                     # Статичные frontend-ассеты
 ├── go.mod / go.sum                 # Go-зависимости
 ├── Dockerfile                      # Multi-stage Go сборка
-├── docker-compose.yml              # Docker Compose сервис
-├── static/                         # Стили, JS, favicon
-└── templates/                      # HTML страницы UI
+└── docker-compose.yml              # Docker Compose сервисы
 ```
 
 Локальный запуск без Docker:
 
 ```bash
+npm install --prefix frontend
+npm run build --prefix frontend
 go run ./
 ```
 
