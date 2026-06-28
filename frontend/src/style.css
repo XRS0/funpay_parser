@@ -3346,3 +3346,80 @@ body {
   .nav-btn svg { width: 16px; height: 16px; }
   .profile-chip { max-width: 150px; }
 }
+
+/* Header v3: prevent saved/scheduler tab collisions with long page titles/profile names */
+.app-header {
+  width: 100% !important;
+  max-width: 100% !important;
+  grid-template-columns: minmax(0, 1fr) max-content max-content !important;
+  column-gap: 18px !important;
+  overflow: visible !important;
+}
+.app-header .brand {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+.app-header .brand > div:last-child {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+.app-header .brand h1,
+.app-header .subtitle {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.app-header .brand h1 { line-height: 1.08 !important; }
+.header-actions {
+  justify-self: end !important;
+  flex: 0 0 auto !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  flex-wrap: nowrap !important;
+  scrollbar-width: none !important;
+}
+.header-actions::-webkit-scrollbar { display: none; }
+.header-actions .nav-btn,
+.nav-btn {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
+.profile-chip {
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+  position: relative !important;
+  z-index: 2 !important;
+}
+@media (max-width: 900px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+    grid-template-areas: 'brand profile' 'tabs tabs' !important;
+    column-gap: 12px !important;
+  }
+  .header-actions {
+    width: 100% !important;
+    justify-self: start !important;
+  }
+}
+
+/* Header v3 responsive cutoff: app content under 1040px needs two rows, not squeezed labels */
+@media (max-width: 1040px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+    grid-template-areas: 'brand profile' 'tabs tabs' !important;
+    row-gap: 14px !important;
+    column-gap: 12px !important;
+  }
+  .app-header .brand { grid-area: brand !important; }
+  .header-actions {
+    grid-area: tabs !important;
+    width: 100% !important;
+    justify-self: start !important;
+    justify-content: flex-start !important;
+  }
+  .profile-chip { grid-area: profile !important; }
+}
