@@ -3508,3 +3508,100 @@ body {
   }
   .app-header .brand { max-width: calc(100vw - 230px) !important; }
 }
+
+/* Header v6: static brand on the left, navigation/profile on the right */
+.app {
+  overflow: visible !important;
+}
+.app-header {
+  width: min(1120px, calc(100vw - 40px)) !important;
+  max-width: min(1120px, calc(100vw - 40px)) !important;
+  margin: 24px auto 38px !important;
+  padding: 8px 0 6px !important;
+  display: grid !important;
+  grid-template-columns: max-content minmax(24px, 1fr) max-content max-content !important;
+  grid-template-areas: 'brand spacer tabs profile' !important;
+  align-items: center !important;
+  justify-content: stretch !important;
+  justify-items: stretch !important;
+  column-gap: 14px !important;
+  row-gap: 14px !important;
+  overflow: visible !important;
+}
+.app-header .brand {
+  grid-area: brand !important;
+  justify-self: start !important;
+  width: max-content !important;
+  max-width: 260px !important;
+  overflow: visible !important;
+}
+.app-header .brand > div:last-child {
+  overflow: visible !important;
+}
+.app-header .brand h1,
+.app-header .subtitle {
+  max-width: 180px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.header-actions {
+  grid-area: tabs !important;
+  justify-self: end !important;
+  justify-content: flex-end !important;
+  width: fit-content !important;
+  max-width: none !important;
+  overflow: visible !important;
+  scrollbar-width: auto !important;
+}
+.header-actions .nav-btn,
+.nav-btn,
+.profile-chip {
+  overflow: visible !important;
+}
+.profile-chip {
+  grid-area: profile !important;
+  justify-self: end !important;
+  max-width: 230px !important;
+}
+@media (max-width: 1080px) {
+  .app-header {
+    width: min(860px, calc(100vw - 40px)) !important;
+    max-width: min(860px, calc(100vw - 40px)) !important;
+    grid-template-columns: max-content minmax(24px, 1fr) max-content !important;
+    grid-template-areas: 'brand spacer profile' 'tabs tabs tabs' !important;
+  }
+  .header-actions {
+    justify-self: end !important;
+    justify-content: flex-end !important;
+    max-width: 100% !important;
+  }
+}
+@media (max-width: 720px) {
+  .app-header {
+    width: min(620px, calc(100vw - 24px)) !important;
+    max-width: min(620px, calc(100vw - 24px)) !important;
+    margin-top: 20px !important;
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+    grid-template-areas: 'brand profile' 'tabs tabs' !important;
+    column-gap: 10px !important;
+  }
+  .app-header .brand { max-width: calc(100vw - 210px) !important; }
+  .app-header .brand h1,
+  .app-header .subtitle { max-width: calc(100vw - 280px) !important; }
+  .header-actions {
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-self: end !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    padding: 2px 0 !important;
+    scrollbar-width: none !important;
+  }
+  .profile-chip { max-width: 150px !important; }
+}
+@media (max-width: 520px) {
+  .profile-chip { max-width: 132px !important; }
+  .app-header .brand h1,
+  .app-header .subtitle { max-width: calc(100vw - 230px) !important; }
+}

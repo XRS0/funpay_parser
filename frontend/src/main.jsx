@@ -374,11 +374,11 @@ function NavButton({ to, children, icon, active }) {
   );
 }
 
-function Header({ title = 'Funpay Parser', subtitle = 'мабой', user }) {
+function Header({ user }) {
   const path = currentPath();
   return (
     <header className='app-header'>
-      <Brand title={title} subtitle={subtitle} />
+      <Brand title='Funpay Parser' subtitle='мабой' />
       <nav className='header-actions' aria-label='Основная навигация'>
         <NavButton to='/' icon={<Play size={18} />} active={path === '/'}>Парсер</NavButton>
         <NavButton to='/saved' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
@@ -1221,20 +1221,12 @@ function App() {
   if (!authenticated) {
     return <><Background /><div className='app'><LoginPage onLogin={async () => { const me = await api('/api/auth/me', { authRedirect: false }).catch(() => null); setCurrentUser(me); setAuthenticated(true); }} showToast={showToast} /></div><Toast toast={toast} /></>;
   }
-  const titles = {
-    '/': ['Funpay Parser', 'мабой'],
-    '/saved': ['Сохранённые результаты', 'История парсинга и детали сохранённых запусков'],
-    '/scheduler': ['Расписание парсинга', 'Автоматический запуск поиска по расписанию'],
-    '/settings': ['Настройки', 'LLM и Telegram'],
-    '/profile': ['Профиль', 'Статистика и аккаунт'],
-  };
-  const [title, subtitle] = titles[path] || titles['/'];
   let page = <HomePage showToast={showToast} />;
   if (path === '/saved') page = <SavedPage showToast={showToast} />;
   if (path === '/scheduler') page = <SchedulerPage showToast={showToast} />;
   if (path === '/settings') page = <SettingsPage showToast={showToast} onLogout={logout} />;
   if (path === '/profile') page = <ProfilePage showToast={showToast} user={currentUser} onUserUpdate={setCurrentUser} />;
-  return <><Background /><div className='app'><Header title={title} subtitle={subtitle} user={currentUser} />{page}</div><Toast toast={toast} /></>;
+  return <><Background /><div className='app'><Header user={currentUser} />{page}</div><Toast toast={toast} /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
