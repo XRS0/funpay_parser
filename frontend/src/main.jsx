@@ -329,8 +329,9 @@ function AnimatedMetricValue({ value, pulseKey, className = '' }) {
   return <span key={pulseKey} className={`metric-value metric-value-animated ${className}`}>{display}</span>;
 }
 
-function StatusPipeline({ progress }) {
+function StatusPipeline({ progress, status }) {
   const text = progress.map((p) => p.message || '').join('\n').toLowerCase();
+  const statusText = String(status || '').toLowerCase();
   const steps = [
     ['fetch', 'Сбор', Search],
     ['filter', 'Фильтр', Database],
@@ -338,7 +339,9 @@ function StatusPipeline({ progress }) {
     ['classify', 'LLM', SettingsIcon],
     ['result', 'Результат', Save],
   ];
-  const activeIndex = text.includes('classifying') || text.includes('llm') ? 3 : text.includes('limited') || text.includes('candidate') ? 2 : text.includes('filtered') ? 1 : text.includes('found') || text.includes('fetch') ? 0 : -1;
+  const isFinished = ['done', 'failed', 'error', 'остановлено'].some((marker) => statusText.includes(marker));
+  const hasResult = text.includes('cheapest personal account') || text.includes('no personal account') || text.includes('full results saved');
+  const activeIndex = isFinished || hasResult ? 4 : text.includes('classifying') || text.includes('llm') ? 3 : text.includes('limited') || text.includes('candidate') ? 2 : text.includes('filtered') ? 1 : text.includes('found') || text.includes('fetch') ? 0 : -1;
   const progressPct = Math.max(8, ((activeIndex + 1) / steps.length) * 100);
   const metrics = useMemo(() => {
     const messages = progress.map((p) => p.message || '');
@@ -576,7 +579,7 @@ function HomePage({ showToast }) {
           </div>
         </section>
 
-        {showStatusBlock && <section className="section reveal visible"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
+        {showStatusBlock && <section className="section reveal visible"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} status={status.status} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
         <ResultsView status={status} selectedProfileId={selectedProfile?.id || status.profile_id} showToast={showToast} />
       </main>
       {profileModal !== null && <ProfileModal profile={profileModal} onClose={() => setProfileModal(null)} onSaved={async (p) => { await loadProfiles(); setProfileModal(null); applyProfile(p); showToast('Профиль сохранён'); }} showToast={showToast} />}
