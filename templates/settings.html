@@ -39,7 +39,7 @@
                 </div>
                 <div>
                     <h1>Настройки</h1>
-                    <p class="subtitle">Конфигурация LLM провайдера</p>
+                    <p class="subtitle">Конфигурация LLM и уведомлений</p>
                 </div>
             </div>
             <div class="header-actions">
@@ -79,8 +79,34 @@
                         <div id="key-status" class="hint" style="margin-top: 6px;"></div>
                     </div>
                     <div class="actions" style="margin-top: 16px;">
-                        <button id="save-key-btn" class="btn btn-primary">Сохранить</button>
+                        <button id="save-key-btn" class="btn btn-primary">Сохранить LLM</button>
                     </div>
+                </div>
+            </section>
+
+            <section class="section reveal" style="animation-delay: 0.1s;">
+                <div class="section-header">
+                    <div class="section-label">Telegram уведомления</div>
+                </div>
+                <div class="card" style="max-width: 640px;">
+                    <div class="field">
+                        <label for="telegram-bot-token">Bot token</label>
+                        <input type="password" id="telegram-bot-token" class="form-input" placeholder="Введите токен Telegram бота">
+                        <div id="telegram-token-status" class="hint" style="margin-top: 6px;"></div>
+                    </div>
+                    <div class="field">
+                        <label for="telegram-chat-id">Chat ID пользователя</label>
+                        <input type="text" id="telegram-chat-id" class="form-input" placeholder="Заполнится автоматически после /start или введи вручную">
+                        <div class="hint" style="margin-top: 4px; color: var(--text-3);">
+                            Сначала открой бота <span id="telegram-bot-link-wrap"></span> в Telegram и отправь <b>/start</b>, затем нажми «Найти чат».
+                        </div>
+                    </div>
+                    <div class="actions" style="margin-top: 16px; display:flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="save-telegram-btn" class="btn btn-primary">Сохранить Telegram</button>
+                        <button id="sync-telegram-btn" class="btn btn-secondary">Найти чат после /start</button>
+                        <button id="test-telegram-btn" class="btn btn-secondary">Тестовое сообщение</button>
+                    </div>
+                    <div id="telegram-status" class="hint" style="margin-top: 12px;"></div>
                 </div>
             </section>
         </main>
@@ -95,6 +121,14 @@
         const saveKeyBtn = document.getElementById('save-key-btn');
         const keyStatus = document.getElementById('key-status');
         const defaultModel = document.getElementById('default-model');
+        const telegramTokenInput = document.getElementById('telegram-bot-token');
+        const telegramChatInput = document.getElementById('telegram-chat-id');
+        const telegramTokenStatus = document.getElementById('telegram-token-status');
+        const telegramStatus = document.getElementById('telegram-status');
+        const telegramBotLinkWrap = document.getElementById('telegram-bot-link-wrap');
+        const saveTelegramBtn = document.getElementById('save-telegram-btn');
+        const syncTelegramBtn = document.getElementById('sync-telegram-btn');
+        const testTelegramBtn = document.getElementById('test-telegram-btn');
         const toast = document.getElementById('toast');
 
         const defaultModels = {
@@ -127,6 +161,29 @@
                 } else {
                     keyStatus.textContent = 'Ключ не настроен.';
                     keyStatus.style.color = 'var(--error)';
+                }
+                telegramTokenInput.value = '';
+                telegramChatInput.value = data.telegram_chat_id || '';
+                if (data.telegram_has_token) {
+                    const botName = data.telegram_bot_username ? ` (@${data.telegram_bot_username})` : '';
+                    telegramTokenStatus.textContent = 'Bot token установлен: ' + data.telegram_bot_token + botName;
+                    telegramTokenStatus.style.color = 'var(--success)';
+                    if (data.telegram_bot_username) {
+                        telegramBotLinkWrap.innerHTML = `<a href="https://t.me/${data.telegram_bot_username}" target="_blank" rel="noreferrer">@${data.telegram_bot_username}</a>`;
+                    } else {
+                        telegramBotLinkWrap.textContent = 'бота';
+                    }
+                } else {
+                    telegramTokenStatus.textContent = 'Bot token не настроен.';
+                    telegramTokenStatus.style.color = 'var(--error)';
+                    telegramBotLinkWrap.textContent = 'бота';
+                }
+                if (data.telegram_notifications) {
+                    telegramStatus.textContent = 'Уведомления включены. Chat ID: ' + data.telegram_chat_id;
+                    telegramStatus.style.color = 'var(--success)';
+                } else {
+                    telegramStatus.textContent = 'Уведомления выключены: нужен token и chat id.';
+                    telegramStatus.style.color = 'var(--text-3)';
                 }
             } catch (err) {
                 keyStatus.textContent = 'Не удалось загрузить настройки.';
@@ -167,6 +224,59 @@
                 showToast('Настройки сохранены');
             } catch (err) {
                 showToast('Ошибка сохранения настроек', true);
+            }
+        });
+
+        saveTelegramBtn.addEventListener('click', async () => {
+            try {
+                const body = {
+                    telegram_chat_id: telegramChatInput.value.trim(),
+                };
+                const token = telegramTokenInput.value.trim();
+                if (token || confirm('Оставить поле token пустым удалит текущий Telegram bot token. Продолжить?')) {
+                    body.telegram_bot_token = token;
+                }
+                const resp = await fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!resp.ok) throw new Error('Failed to save telegram settings');
+                showToast('Telegram настройки сохранены');
+                await loadSettings();
+            } catch (err) {
+                showToast('Ошибка сохранения Telegram настроек', true);
+            }
+        });
+
+        syncTelegramBtn.addEventListener('click', async () => {
+            try {
+                telegramStatus.textContent = 'Ищу последние сообщения боту...';
+                const resp = await fetch('/api/telegram/sync', { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Telegram sync failed');
+                telegramChatInput.value = data.chat_id || '';
+                telegramStatus.textContent = `Чат найден: ${data.chat_id}${data.chat_username ? ' @' + data.chat_username : ''}`;
+                telegramStatus.style.color = 'var(--success)';
+                showToast('Telegram чат найден');
+                await loadSettings();
+            } catch (err) {
+                telegramStatus.textContent = err.message;
+                telegramStatus.style.color = 'var(--error)';
+                showToast('Не удалось найти чат', true);
+            }
+        });
+
+        testTelegramBtn.addEventListener('click', async () => {
+            try {
+                const resp = await fetch('/api/telegram/test', { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Telegram test failed');
+                showToast('Тестовое сообщение отправлено');
+            } catch (err) {
+                telegramStatus.textContent = err.message;
+                telegramStatus.style.color = 'var(--error)';
+                showToast('Ошибка отправки тестового сообщения', true);
             }
         });
 
