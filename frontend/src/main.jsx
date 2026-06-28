@@ -481,63 +481,38 @@ function HomePage({ showToast }) {
     <>
       <Header />
       <main className="main">
-        <section className="section reveal visible search-profiles-section">
-          <div className="profiles-shell">
-            <div className="profiles-copy">
-              <div className="section-kicker">Профили поиска</div>
-              <h2 className="section-title">Быстрый выбор сценария</h2>
-              <p className="section-description">Сохраняй частые запросы, лимиты и deep mode. Выбранный профиль сразу подставляется в текущий запуск.</p>
+        <section className="section reveal visible search-profiles-section compact-profiles">
+          <div className="section-header profiles-header-compact">
+            <div>
+              <div className="section-label">Профили поиска</div>
+              {selectedProfile && <div className="profile-inline-selected">Выбран: {selectedProfile.name}</div>}
             </div>
             <button className="btn btn-primary btn-sm profiles-create" onClick={() => setProfileModal({})}><Plus size={18} />Новый профиль</button>
           </div>
           {!profiles.length ? (
-            <div className="profiles-empty-panel">
-              <div className="profiles-empty-title">Профилей пока нет</div>
-              <div className="profiles-empty-text">Создай профиль для ChatGPT Plus, Team или любой другой категории — потом запуск будет в один клик.</div>
-              <button className="btn btn-secondary btn-sm" onClick={() => setProfileModal({})}>Создать первый профиль</button>
+            <div className="profiles-empty-compact">
+              <span>Профилей нет</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => setProfileModal({})}>Создать</button>
             </div>
           ) : (
-            <div className="profiles-workspace">
-              <div className="profiles-list stagger visible">
-                {profiles.map((p, i) => <button type="button" key={p.id} className={`profile-card stagger-item ${selectedProfile?.id === p.id ? 'active' : ''}`} style={{ animationDelay: `${i * 0.04}s` }} onClick={() => applyProfile(p)}>
-                  <div className="profile-card-head">
-                    <div className="profile-name">{p.name}</div>
-                    {selectedProfile?.id === p.id && <span className="profile-active-mark"><CheckCircle2 size={14} />Выбран</span>}
-                  </div>
-                  <div className="profile-query">{p.query}</div>
-                  <div className="profile-meta-row">
-                    <span>ID {p.category_id}</span>
-                    <span>{p.candidates} кандидатов</span>
-                    <span>{p.max_pages ? `${p.max_pages} стр.` : 'все страницы'}</span>
-                    {p.deep && <span>Deep</span>}
-                  </div>
-                  <div className="profile-actions" aria-label="Действия профиля">
-                    <span className="profile-action-link" onClick={(e) => { e.stopPropagation(); setProfileModal(p); }}><Edit3 size={15} />Изменить</span>
-                    <span className="profile-action-link danger" onClick={(e) => { e.stopPropagation(); deleteProfile(p); }}><Trash2 size={15} />Удалить</span>
-                  </div>
-                </button>)}
-              </div>
-              <aside className="selected-profile-panel">
-                <div className="selected-profile-label">Активный сценарий</div>
-                {selectedProfile ? (
-                  <>
-                    <div className="selected-profile-name">{selectedProfile.name}</div>
-                    <div className="selected-profile-query">{selectedProfile.query}</div>
-                    <div className="selected-profile-grid">
-                      <div><span>Категория</span><strong>{selectedProfile.category_id}</strong></div>
-                      <div><span>Кандидаты</span><strong>{selectedProfile.candidates}</strong></div>
-                      <div><span>Страницы</span><strong>{selectedProfile.max_pages || 'Все'}</strong></div>
-                      <div><span>Deep</span><strong>{selectedProfile.deep ? 'Да' : 'Нет'}</strong></div>
-                    </div>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setSelectedProfile(null)}>Сбросить выбор</button>
-                  </>
-                ) : (
-                  <>
-                    <div className="selected-profile-name muted">Без профиля</div>
-                    <p className="selected-profile-help">Запуск пойдёт по параметрам из формы ниже. Выбери профиль слева, чтобы использовать сохранённые настройки.</p>
-                  </>
-                )}
-              </aside>
+            <div className="profiles-list compact-list stagger visible">
+              {profiles.map((p, i) => <button type="button" key={p.id} className={`profile-card compact-profile-card stagger-item ${selectedProfile?.id === p.id ? 'active' : ''}`} style={{ animationDelay: `${i * 0.025}s` }} onClick={() => applyProfile(p)}>
+                <div className="profile-main-line">
+                  <span className="profile-name">{p.name}</span>
+                  <span className="profile-query">{p.query}</span>
+                </div>
+                <div className="profile-meta-row compact">
+                  <span>ID {p.category_id}</span>
+                  <span>{p.candidates} канд.</span>
+                  <span>{p.max_pages ? `${p.max_pages} стр.` : 'все'}</span>
+                  {p.deep && <span>Deep</span>}
+                </div>
+                <div className="profile-actions compact-actions" aria-label="Действия профиля">
+                  {selectedProfile?.id === p.id && <span className="profile-active-dot" title="Выбран" />}
+                  <span className="profile-action-link" onClick={(e) => { e.stopPropagation(); setProfileModal(p); }}><Edit3 size={14} /></span>
+                  <span className="profile-action-link danger" onClick={(e) => { e.stopPropagation(); deleteProfile(p); }}><Trash2 size={14} /></span>
+                </div>
+              </button>)}
             </div>
           )}
         </section>
@@ -633,81 +608,70 @@ function SettingsPage({ showToast }) {
   const [tgToken, setTgToken] = useState('');
   const [tgChat, setTgChat] = useState('');
   const [tgProxy, setTgProxy] = useState('');
+  const [editLLM, setEditLLM] = useState(false);
+  const [editTelegram, setEditTelegram] = useState(false);
   const load = useCallback(async () => { const d = await api('/api/settings'); setData(d); setProvider(d.llm_provider || 'fireworks'); setModel(d.llm_model || ''); setTgChat(d.telegram_chat_id || ''); setTgProxy(d.telegram_proxy || ''); }, []);
   useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
-  const saveLLM = async () => { if (!key && !window.confirm('Оставить поле пустым удалит текущий ключ. Продолжить?')) return; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ llm_provider: provider, llm_model: model.trim(), llm_api_key: key.trim() }) }); setKey(''); await load(); showToast('Настройки LLM сохранены'); } catch (err) { showToast(err.message, true); } };
-  const saveTelegram = async () => { const body = { telegram_chat_id: tgChat.trim(), telegram_proxy: tgProxy.trim() }; const token = tgToken.trim(); if (token || window.confirm('Оставить поле token пустым удалит текущий Telegram bot token. Продолжить?')) body.telegram_bot_token = token; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }); setTgToken(''); await load(); showToast('Telegram настройки сохранены'); } catch (err) { showToast(err.message, true); } };
-  const syncTelegram = async () => { try { const d = await api('/api/telegram/sync', { method: 'POST' }); setTgChat(d.chat_id || ''); await load(); showToast('Telegram чат найден'); } catch (err) { showToast(err.message, true); } };
-  const testTelegram = async () => { try { await api('/api/telegram/test', { method: 'POST' }); showToast('Тестовое сообщение отправлено'); } catch (err) { showToast(err.message, true); } };
+  const saveLLM = async () => { if (!key && !window.confirm('Пустое поле удалит текущий ключ. Продолжить?')) return; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ llm_provider: provider, llm_model: model.trim(), llm_api_key: key.trim() }) }); setKey(''); setEditLLM(false); await load(); showToast('LLM сохранён'); } catch (err) { showToast(err.message, true); } };
+  const saveTelegram = async () => { const body = { telegram_chat_id: tgChat.trim(), telegram_proxy: tgProxy.trim() }; const token = tgToken.trim(); if (token || window.confirm('Пустое поле token удалит текущий token. Продолжить?')) body.telegram_bot_token = token; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }); setTgToken(''); setEditTelegram(false); await load(); showToast('Telegram сохранён'); } catch (err) { showToast(err.message, true); } };
+  const syncTelegram = async () => { try { const d = await api('/api/telegram/sync', { method: 'POST' }); setTgChat(d.chat_id || ''); await load(); showToast('Чат найден'); } catch (err) { showToast(err.message, true); } };
+  const testTelegram = async () => { try { await api('/api/telegram/test', { method: 'POST' }); showToast('Тест отправлен'); } catch (err) { showToast(err.message, true); } };
   const llmReady = !!data?.has_key;
   const telegramReady = !!data?.telegram_notifications;
   const proxyReady = !!data?.telegram_proxy_active;
   return <>
-    <Header title="Настройки" subtitle="LLM, Telegram и сетевые маршруты" />
-    <main className="main settings-page">
-      <section className="settings-hero reveal visible">
-        <div>
-          <div className="section-kicker">Конфигурация</div>
-          <h2 className="section-title">Все ключи и уведомления в одном месте</h2>
-          <p className="section-description">Секреты не показываются полностью. Пустое поле ключа или токена означает удаление текущего значения после подтверждения.</p>
-        </div>
-        <div className="settings-health">
-          <div className={`health-item ${llmReady ? 'ready' : ''}`}><KeyRound size={18} /><span>LLM</span><strong>{llmReady ? 'готов' : 'нужен ключ'}</strong></div>
-          <div className={`health-item ${telegramReady ? 'ready' : ''}`}><Bot size={18} /><span>Telegram</span><strong>{telegramReady ? 'включён' : 'не настроен'}</strong></div>
-          <div className={`health-item ${proxyReady ? 'ready' : ''}`}><Wifi size={18} /><span>Proxy</span><strong>{proxyReady ? 'активен' : 'не задан'}</strong></div>
-        </div>
+    <Header title="Настройки" subtitle="LLM и Telegram" />
+    <main className="main settings-page lean-settings">
+      <section className="settings-summary-row reveal visible">
+        <div className={`settings-pill ${llmReady ? 'ready' : ''}`}><KeyRound size={16} />LLM: {llmReady ? 'готов' : 'нет ключа'}</div>
+        <div className={`settings-pill ${telegramReady ? 'ready' : ''}`}><Bot size={16} />Telegram: {telegramReady ? 'включён' : 'выключен'}</div>
+        <div className={`settings-pill ${proxyReady ? 'ready' : ''}`}><Wifi size={16} />Proxy: {proxyReady ? 'активен' : 'нет'}</div>
       </section>
 
-      <div className="settings-layout">
-        <section className="settings-card reveal visible">
-          <div className="settings-card-head">
-            <div className="settings-icon"><SlidersHorizontal size={20} /></div>
-            <div>
-              <h3>LLM классификация</h3>
-              <p>Провайдер и модель, которые определяют тип аккаунта и уверенность по каждому лоту.</p>
+      <section className="settings-edit-card reveal visible">
+        <div className="settings-edit-head">
+          <div>
+            <h2>LLM</h2>
+            <div className="settings-readonly-grid">
+              <div><span>Провайдер</span><strong>{data?.llm_provider || provider}</strong></div>
+              <div><span>Модель</span><strong>{data?.llm_model || defaultModels[provider]}</strong></div>
+              <div><span>Ключ</span><strong>{llmReady ? data.llm_api_key : 'не задан'}</strong></div>
             </div>
           </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setEditLLM((v) => !v)}>{editLLM ? 'Закрыть' : 'Изменить'}</button>
+        </div>
+        {editLLM && <div className="settings-edit-body">
           <div className="settings-form-grid two">
             <Field label="Провайдер"><select className="form-input clean-input" value={provider} onChange={(e) => setProvider(e.target.value)}><option value="fireworks">Fireworks</option><option value="openrouter">OpenRouter</option></select></Field>
             <Field label="Модель"><input className="form-input clean-input" value={model} onChange={(e) => setModel(e.target.value)} placeholder={defaultModels[provider]} /></Field>
           </div>
-          <Field label="API ключ"><input className="form-input clean-input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Вставь новый ключ или оставь пустым для удаления" /></Field>
-          <div className="setting-note"><ShieldCheck size={16} />{data?.has_key ? `Ключ установлен: ${data.llm_api_key}` : 'Ключ не настроен. Классификация не сможет обращаться к LLM.'}</div>
-          <div className="settings-actions"><button className="btn btn-primary" onClick={saveLLM}>Сохранить LLM</button><span>По умолчанию: {defaultModels[provider]}</span></div>
-        </section>
+          <Field label="API ключ"><input className="form-input clean-input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Новый ключ" /></Field>
+          <div className="settings-actions"><button className="btn btn-primary" onClick={saveLLM}>Сохранить</button><button className="btn btn-ghost" onClick={() => { setEditLLM(false); setKey(''); load(); }}>Отмена</button></div>
+        </div>}
+      </section>
 
-        <aside className="settings-side reveal visible">
-          <div className="settings-side-card">
-            <div className="side-title">Текущий маршрут</div>
-            <div className="route-line"><Route size={16} /><span>FunPay</span><strong>PROXY env</strong></div>
-            <div className="route-line"><Wifi size={16} /><span>Telegram</span><strong>{proxyReady ? 'отдельный proxy' : 'прямое соединение'}</strong></div>
-            <p>FunPay и Telegram используют разные сетевые настройки. Это важно, чтобы VPN для Telegram не мешал парсингу FunPay.</p>
-          </div>
-          <div className="settings-side-card compact">
-            <div className="side-title">Статус уведомлений</div>
-            <strong className={telegramReady ? 'ok-text' : 'muted-text'}>{telegramReady ? 'Уведомления включены' : 'Нужны token и chat id'}</strong>
-            {data?.telegram_bot_username && <a href={`https://t.me/${data.telegram_bot_username}`} target="_blank" rel="noreferrer">@{data.telegram_bot_username}</a>}
-          </div>
-        </aside>
-
-        <section className="settings-card telegram-card reveal visible">
-          <div className="settings-card-head">
-            <div className="settings-icon"><Bot size={20} /></div>
-            <div>
-              <h3>Telegram уведомления</h3>
-              <p>Бот получает событие о найденной сделке и отправляет сообщение в выбранный чат.</p>
+      <section className="settings-edit-card reveal visible">
+        <div className="settings-edit-head">
+          <div>
+            <h2>Telegram</h2>
+            <div className="settings-readonly-grid telegram">
+              <div><span>Bot</span><strong>{data?.telegram_bot_username ? `@${data.telegram_bot_username}` : data?.telegram_has_token ? 'token задан' : 'не задан'}</strong></div>
+              <div><span>Chat ID</span><strong>{data?.telegram_chat_id || 'не задан'}</strong></div>
+              <div><span>Proxy</span><strong>{proxyReady ? (data?.telegram_proxy || 'env') : 'не задан'}</strong></div>
+              <div><span>Уведомления</span><strong>{telegramReady ? 'включены' : 'выключены'}</strong></div>
             </div>
           </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setEditTelegram((v) => !v)}>{editTelegram ? 'Закрыть' : 'Изменить'}</button>
+        </div>
+        {editTelegram && <div className="settings-edit-body">
           <div className="settings-form-grid two">
-            <Field label="Bot token"><input className="form-input clean-input" type="password" value={tgToken} onChange={(e) => setTgToken(e.target.value)} placeholder="Новый token бота" /></Field>
-            <Field label="Chat ID"><input className="form-input clean-input" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="Автоматически после /start или вручную" /></Field>
+            <Field label="Bot token"><input className="form-input clean-input" type="password" value={tgToken} onChange={(e) => setTgToken(e.target.value)} placeholder="Новый token" /></Field>
+            <Field label="Chat ID"><input className="form-input clean-input" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="Chat ID" /></Field>
           </div>
           <Field label="Telegram proxy / VPN"><input className="form-input clean-input" value={tgProxy} onChange={(e) => setTgProxy(e.target.value)} placeholder="socks5://127.0.0.1:10808" /></Field>
-          <div className="setting-note"><Bot size={16} />{data?.telegram_has_token ? `Token установлен: ${data.telegram_bot_token}${data.telegram_bot_username ? ` (@${data.telegram_bot_username})` : ''}` : 'Bot token не настроен.'}</div>
-          <div className="setting-note"><Wifi size={16} />{data?.telegram_proxy_active ? `Telegram proxy активен: ${data.telegram_proxy || 'env'}` : 'Telegram proxy не задан. FunPay proxy остаётся отдельным.'}</div>
-          <div className="settings-actions wrap"><button className="btn btn-primary" onClick={saveTelegram}>Сохранить Telegram</button><button className="btn btn-secondary" onClick={syncTelegram}>Найти чат после /start</button><button className="btn btn-secondary" onClick={testTelegram}>Тестовое сообщение</button></div>
-        </section>
-      </div>
+          <div className="settings-actions wrap"><button className="btn btn-primary" onClick={saveTelegram}>Сохранить</button><button className="btn btn-secondary" onClick={syncTelegram}>Найти чат</button><button className="btn btn-secondary" onClick={testTelegram}>Тест</button><button className="btn btn-ghost" onClick={() => { setEditTelegram(false); setTgToken(''); load(); }}>Отмена</button></div>
+        </div>}
+      </section>
     </main>
   </>;
 }
