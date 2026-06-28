@@ -249,11 +249,42 @@ func (c *Client) SendDealReport(ctx context.Context, chatID string, res runner.R
 	}
 	img, err := DealReportImage(res)
 	if err == nil {
-		if err := c.SendPhoto(ctx, chatID, img, telegramCaption(text)); err == nil {
+		if err := c.SendPhoto(ctx, chatID, img, DealCaption(res)); err == nil {
 			return nil
 		}
 	}
 	return c.SendMessage(ctx, chatID, text)
+}
+
+func DealCaption(res runner.Result) string {
+	if res.Cheapest == nil {
+		return ""
+	}
+	l := res.Cheapest
+	s := res.Summary
+	reason := strings.TrimSpace(l.ClassificationReason)
+	if reason == "" {
+		reason = "подтверждён как личный аккаунт"
+	}
+	return fmt.Sprintf(
+		"🌌 <b>Funpay Parser — отчёт готов</b>\n\n"+
+			"🏆 <b>%s</b>\n"+
+			"💰 <b>%.2f %s</b> · 👤 %s · 🎯 %s\n\n"+
+			"📊 Лотов: <b>%d</b> · LLM: <b>%d</b> · Личных: <b>%d</b> · Общих: <b>%d</b>\n"+
+			"🧠 %s\n\n"+
+			"🔗 <a href=\"%s\">Открыть лот на Funpay</a>",
+		html.EscapeString(truncate(l.Title, 115)),
+		l.Price,
+		html.EscapeString(l.Currency),
+		html.EscapeString(truncate(emptyDash(l.Seller), 36)),
+		confidence(l),
+		s["total_plus"],
+		s["classified"],
+		s["personal"],
+		s["shared"],
+		html.EscapeString(truncate(reason, 180)),
+		html.EscapeString(l.URL),
+	)
 }
 
 func telegramCaption(text string) string {

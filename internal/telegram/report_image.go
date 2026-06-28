@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"funpay-parser/internal/models"
 	"funpay-parser/internal/runner"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
@@ -40,8 +41,7 @@ func DealReportImage(res runner.Result) ([]byte, error) {
 
 	drawText(img, 160, 80, "FUNPAY PARSER", white, 2)
 	drawText(img, 162, 114, "dark space deal report", muted, 1)
-	drawPill(img, 945, 64, 178, 42, "REPORT", color.RGBA{255, 255, 255, 230})
-	drawText(img, 948, 130, time.Now().Format("02.01.2006 15:04"), muted, 1)
+	drawReportMark(img, 965, 68, time.Now())
 
 	card := color.RGBA{12, 13, 18, 226}
 	drawRoundedRect(img, 64, 178, 1072, 330, 28, card, color.RGBA{255, 255, 255, 28})
@@ -52,7 +52,7 @@ func DealReportImage(res runner.Result) ([]byte, error) {
 		price := fmt.Sprintf("%.2f %s", l.Price, strings.TrimSpace(l.Currency))
 		drawText(img, 96, 405, price, green, 4)
 		drawText(img, 100, 462, "seller: "+emptyDash(l.Seller), muted, 1)
-		drawPill(img, 896, 392, 180, 44, "confidence "+confidence(l), blue)
+		drawConfidenceBlock(img, 884, 368, 210, 86, confidence(l), confidenceValue(l))
 	} else {
 		drawText(img, 96, 260, "No personal account confirmed", red, 3)
 		drawText(img, 100, 320, "Try more candidates or enable Deep mode", muted, 1)
@@ -180,6 +180,38 @@ func drawPill(img *image.RGBA, x, y, w, h int, text string, col color.RGBA) {
 	drawRoundedRect(img, x, y, w, h, h/2, color.RGBA{255, 255, 255, 24}, color.RGBA{255, 255, 255, 34})
 	drawTextCentered(img, x, y+h/2+5, w, text, col, 1)
 }
+
+func drawReportMark(img *image.RGBA, x, y int, t time.Time) {
+	white := color.RGBA{245, 247, 255, 235}
+	muted := color.RGBA{156, 163, 183, 255}
+	drawText(img, x, y, "REPORT", white, 1)
+	for i := 0; i < 58; i++ {
+		blend(img, x+i, y+13, color.RGBA{255, 255, 255, uint8(190 - i*2)})
+	}
+	drawText(img, x-38, y+44, t.Format("02.01.2006 15:04"), muted, 1)
+}
+
+func drawConfidenceBlock(img *image.RGBA, x, y, w, h int, text string, value float64) {
+	muted := color.RGBA{156, 163, 183, 255}
+	blue := color.RGBA{96, 165, 250, 255}
+	white := color.RGBA{245, 247, 255, 240}
+	drawText(img, x, y, "CONFIDENCE", muted, 1)
+	drawText(img, x, y+34, text, white, 2)
+	barX, barY, barW := x, y+54, w
+	drawRoundedRect(img, barX, barY, barW, 10, 5, color.RGBA{255, 255, 255, 22}, color.RGBA{255, 255, 255, 18})
+	fill := int(float64(barW) * value)
+	if fill < 8 {
+		fill = 8
+	}
+	if fill > barW {
+		fill = barW
+	}
+	drawRoundedRect(img, barX, barY, fill, 10, 5, color.RGBA{96, 165, 250, 210}, color.RGBA{147, 197, 253, 80})
+	for i := 0; i < fill; i++ {
+		blend(img, barX+i, barY+4, color.RGBA{255, 255, 255, uint8(90 * (1 - float64(i)/float64(max(fill, 1))))})
+	}
+	blend(img, barX+fill-1, barY+4, blue)
+}
 func drawText(img *image.RGBA, x, y int, text string, col color.RGBA, scale int) {
 	drawScaledText(img, x, y, text, col, scale)
 }
@@ -268,4 +300,18 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func confidenceValue(l *models.Listing) float64 {
+	if l == nil || l.Confidence == nil {
+		return 0
+	}
+	v := *l.Confidence
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
