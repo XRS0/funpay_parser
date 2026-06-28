@@ -481,7 +481,7 @@ func (s *Server) notifyTelegram(res runner.Result) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := telegram.NewWithProxy(token, s.cfg.EffectiveTelegramProxyURL()).SendMessage(ctx, chatID, text); err != nil {
+	if err := telegram.NewWithProxy(token, s.cfg.EffectiveTelegramProxyURL()).SendDealReport(ctx, chatID, res); err != nil {
 		log.Println("telegram notification failed:", err)
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -195,19 +196,110 @@ func (c *Client) SendMessage(ctx context.Context, chatID string, text string) er
 	return nil
 }
 
+func (c *Client) SendPhoto(ctx context.Context, chatID string, pngBytes []byte, caption string) error {
+	if !c.enabled() {
+		return fmt.Errorf("telegram bot token is empty")
+	}
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return fmt.Errorf("telegram chat id is empty")
+	}
+	if len(pngBytes) == 0 {
+		return fmt.Errorf("telegram photo is empty")
+	}
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("chat_id", chatID)
+	_ = mw.WriteField("caption", caption)
+	_ = mw.WriteField("parse_mode", "HTML")
+	_ = mw.WriteField("disable_notification", "false")
+	part, err := mw.CreateFormFile("photo", "funpay-report.png")
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(pngBytes); err != nil {
+		return err
+	}
+	_ = mw.Close()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL("sendPhoto"), &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return c.safeErr(err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if !out.OK {
+		if out.Description == "" {
+			out.Description = fmt.Sprintf("telegram sendPhoto failed with http %d", resp.StatusCode)
+		}
+		return fmt.Errorf("%s", out.Description)
+	}
+	return nil
+}
+
+func (c *Client) SendDealReport(ctx context.Context, chatID string, res runner.Result) error {
+	text := DealMessage(res)
+	if text == "" {
+		return nil
+	}
+	img, err := DealReportImage(res)
+	if err == nil {
+		if err := c.SendPhoto(ctx, chatID, img, telegramCaption(text)); err == nil {
+			return nil
+		}
+	}
+	return c.SendMessage(ctx, chatID, text)
+}
+
+func telegramCaption(text string) string {
+	r := []rune(text)
+	if len(r) <= 950 {
+		return text
+	}
+	return string(r[:930]) + "…"
+}
+
 func DealMessage(res runner.Result) string {
 	if res.Cheapest == nil {
 		return ""
 	}
 	l := res.Cheapest
+	s := res.Summary
+	reason := strings.TrimSpace(l.ClassificationReason)
+	if reason == "" {
+		reason = "LLM подтвердил, что это похоже на личный аккаунт."
+	}
 	return fmt.Sprintf(
-		"🔥 <b>Найдено крутое предложение</b>\n\n<b>%s</b>\n\n💰 Цена: <b>%.2f %s</b>\n👤 Продавец: %s\n🎯 Confidence: %s\n\n%s\n\n🔗 %s",
+		"🌌 <b>Funpay Parser — отчёт готов</b>\n\n"+
+			"🏆 <b>Самый дешёвый личный аккаунт</b>\n"+
+			"<b>%s</b>\n\n"+
+			"💰 <b>Цена:</b> %.2f %s\n"+
+			"👤 <b>Продавец:</b> %s\n"+
+			"🎯 <b>Confidence:</b> %s\n\n"+
+			"📊 <b>Статистика</b>\n"+
+			"• Лотов найдено: <b>%d</b>\n"+
+			"• Проверено LLM: <b>%d</b>\n"+
+			"• Личных: <b>%d</b>\n"+
+			"• Общих: <b>%d</b>\n"+
+			"• Прочее: <b>%d</b>\n\n"+
+			"🧠 <b>Почему выбран:</b> %s\n\n"+
+			"🔗 <a href=\"%s\">Открыть лот на Funpay</a>",
 		html.EscapeString(l.Title),
 		l.Price,
 		html.EscapeString(l.Currency),
 		html.EscapeString(l.Seller),
 		confidence(l),
-		html.EscapeString(l.ClassificationReason),
+		s["total_plus"],
+		s["classified"],
+		s["personal"],
+		s["shared"],
+		s["other"],
+		html.EscapeString(reason),
 		html.EscapeString(l.URL),
 	)
 }

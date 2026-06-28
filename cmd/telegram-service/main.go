@@ -39,7 +39,7 @@ func main() {
 		}
 		mctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		if err := telegram.NewWithProxy(token, cfg.EffectiveTelegramProxyURL()).SendMessage(mctx, chatID, text); err != nil {
+		if err := telegram.NewWithProxy(token, cfg.EffectiveTelegramProxyURL()).SendDealReport(mctx, chatID, ev.Result); err != nil {
 			log.Println("telegram notification failed:", err)
 			return nil
 		}
