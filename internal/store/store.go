@@ -188,11 +188,17 @@ func (s *Store) PruneAllSaved(ctx context.Context, keep int) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	var userIDs []int64
 	for rows.Next() {
 		var userID int64
 		if err := rows.Scan(&userID); err == nil {
-			_ = s.PruneSaved(ctx, userID, keep)
+			userIDs = append(userIDs, userID)
+		}
+	}
+	_ = rows.Close()
+	for _, userID := range userIDs {
+		if err := s.PruneSaved(ctx, userID, keep); err != nil {
+			return err
 		}
 	}
 	return nil
