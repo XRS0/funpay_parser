@@ -14,7 +14,7 @@
   --danger: #ef4444;
   --warning: #f59e0b;
   --status-active: #22d3ee;
-  --status-done: #3b82f6;
+  --status-done: #ffffff;
   --border: rgba(255, 255, 255, 0.08);
   --border-2: rgba(255, 255, 255, 0.14);
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
@@ -455,7 +455,7 @@ h1 {
 .progress-line:last-child { border-bottom: none; }
 
 .progress-line .time {
-  color: var(--accent-2);
+  color: var(--text-3);
   margin-right: 10px;
   font-size: 0.75rem;
   opacity: 0.8;
@@ -464,7 +464,7 @@ h1 {
 .progress-line.success { border-left-color: var(--success); color: var(--text); }
 .progress-line.error { border-left-color: var(--danger); color: var(--danger); }
 .progress-line.warning { border-left-color: var(--warning); color: var(--warning); }
-.progress-line.info { border-left-color: var(--accent-2); }
+.progress-line.info { border-left-color: var(--text-2); }
 
 /* Results redesign */
 .cheapest-card {
@@ -1623,7 +1623,7 @@ html {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--status-active), var(--accent-2), var(--status-active), transparent);
+  background: linear-gradient(90deg, transparent, var(--status-active), var(--status-done), var(--status-active), transparent);
   background-size: 200% 100%;
   animation: top-shimmer 2s linear infinite;
 }
@@ -1765,7 +1765,7 @@ html {
 
 .pipeline-step.done .step-ring {
   border-color: var(--status-done);
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .pipeline-step.done .step-ring svg {
@@ -1835,7 +1835,7 @@ html {
 .status-loader .progress-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--status-active), var(--accent-2));
+  background: linear-gradient(90deg, var(--status-active), var(--status-done));
   border-radius: 999px;
   transition: width 0.4s ease;
   box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
