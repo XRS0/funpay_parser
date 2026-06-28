@@ -3068,3 +3068,70 @@ body {
     background: rgba(4, 4, 6, 0.46);
   }
 }
+
+/* Header nav without button backplates */
+.header-actions {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  padding: 0 !important;
+}
+
+.nav-btn,
+.nav-btn.active,
+.nav-btn:hover:not(.active) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.nav-btn {
+  color: rgba(255,255,255,0.68) !important;
+}
+
+.nav-btn::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 4px;
+  height: 1px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.82);
+  opacity: 0;
+  transform: scaleX(0.45);
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.nav-btn:hover:not(.active) {
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+.nav-btn:hover:not(.active)::after {
+  opacity: 0.42;
+  transform: scaleX(1);
+}
+
+.nav-btn.active {
+  color: #fff !important;
+  text-shadow: 0 0 18px rgba(255,255,255,0.34);
+}
+
+.nav-btn.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 0 14px rgba(255,255,255,0.34);
+}
+
+.nav-btn.active svg {
+  color: #fff !important;
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    background: transparent !important;
+  }
+}
