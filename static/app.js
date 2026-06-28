@@ -5,7 +5,6 @@
     // Global mouse / scroll state used for all parallax.
     let mouseX = 0, mouseY = 0, scrollY = 0;
     let smoothMouseX = 0, smoothMouseY = 0, smoothScrollY = 0;
-    let velocityMouseX = 0, velocityMouseY = 0, velocityScrollY = 0;
 
     document.addEventListener('mousemove', (e) => {
         mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
@@ -15,27 +14,14 @@
         scrollY = window.scrollY;
     }, { passive: true });
 
-    // Spring smoothing for the input values so the parallax never stops abruptly.
-    // Higher damping = less overshoot; spring controls how fast it follows input.
-    const spring = 0.06;
-    const damping = 0.96;
+    // Smooth interpolation so the parallax never stops abruptly.
+    // Lower factor = slower/more subtle follow, higher = snappier.
+    const lerpFactor = 0.04;
 
     function smoothInput() {
-        const forceX = (mouseX - smoothMouseX) * spring;
-        const forceY = (mouseY - smoothMouseY) * spring;
-        const forceS = (scrollY - smoothScrollY) * spring;
-
-        velocityMouseX += forceX;
-        velocityMouseY += forceY;
-        velocityScrollY += forceS;
-
-        velocityMouseX *= damping;
-        velocityMouseY *= damping;
-        velocityScrollY *= damping;
-
-        smoothMouseX += velocityMouseX;
-        smoothMouseY += velocityMouseY;
-        smoothScrollY += velocityScrollY;
+        smoothMouseX += (mouseX - smoothMouseX) * lerpFactor;
+        smoothMouseY += (mouseY - smoothMouseY) * lerpFactor;
+        smoothScrollY += (scrollY - smoothScrollY) * lerpFactor;
     }
 
     // Parallax on mouse move and scroll for elements with .parallax
@@ -48,8 +34,8 @@
         function animateParallax() {
             requestAnimationFrame(animateParallax);
             layers.forEach((layer) => {
-                const moveX = smoothMouseX * layer.speed * 60;
-                const moveY = smoothMouseY * layer.speed * 60 + smoothScrollY * layer.speed * 0.4;
+                const moveX = smoothMouseX * layer.speed * 30;
+                const moveY = smoothMouseY * layer.speed * 30 + smoothScrollY * layer.speed * 0.2;
                 layer.el.style.transform = `translate(${moveX}px, ${moveY}px)`;
             });
         }
@@ -132,8 +118,8 @@
         }
 
         function drawStar(s) {
-            const parallaxX = smoothMouseX * s.depth * 35;
-            const parallaxY = smoothMouseY * s.depth * 35 + smoothScrollY * s.depth * 0.3;
+            const parallaxX = smoothMouseX * s.depth * 20;
+            const parallaxY = smoothMouseY * s.depth * 20 + smoothScrollY * s.depth * 0.2;
             const x = (s.baseX + parallaxX + width) % width;
             const y = (s.baseY + parallaxY + height) % height;
 
