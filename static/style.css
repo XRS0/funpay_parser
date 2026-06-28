@@ -13,7 +13,7 @@
   --success-glow: rgba(255, 255, 255, 0.2);
   --danger: #ef4444;
   --warning: #f59e0b;
-  --status-active: #22d3ee;
+  --status-active: #ffffff;
   --status-done: #ffffff;
   --border: rgba(255, 255, 255, 0.08);
   --border-2: rgba(255, 255, 255, 0.14);
@@ -400,10 +400,10 @@ h1 {
 }
 
 #status-badge.running {
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.5);
   color: var(--status-active);
-  box-shadow: 0 0 16px rgba(34, 211, 238, 0.25);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.25);
 }
 
 #status-badge.running .status-dot {
@@ -1612,7 +1612,7 @@ html {
 }
 
 .status-card.running {
-  border-color: rgba(34, 211, 238, 0.45);
+  border-color: rgba(255, 255, 255, 0.45);
   animation: status-breathe 3s ease-in-out infinite;
 }
 
@@ -1638,12 +1638,12 @@ html {
 }
 
 .status-card.running:hover {
-  border-color: rgba(34, 211, 238, 0.45);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 @keyframes status-breathe {
-  0%, 100% { box-shadow: 0 0 30px rgba(34, 211, 238, 0.08); }
-  50% { box-shadow: 0 0 55px rgba(34, 211, 238, 0.18); }
+  0%, 100% { box-shadow: 0 0 30px rgba(255, 255, 255, 0.08); }
+  50% { box-shadow: 0 0 55px rgba(255, 255, 255, 0.18); }
 }
 
 @keyframes top-shimmer {
@@ -1682,7 +1682,7 @@ html {
 
 .metric.active {
   border-color: var(--status-active);
-  background: rgba(34, 211, 238, 0.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .metric-value {
@@ -1751,8 +1751,8 @@ html {
 
 .pipeline-step.active .step-ring {
   border-color: var(--status-active);
-  background: rgba(34, 211, 238, 0.1);
-  box-shadow: 0 0 16px rgba(34, 211, 238, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
 }
 
 .pipeline-step.active .step-ring svg {
@@ -1838,7 +1838,7 @@ html {
   background: linear-gradient(90deg, var(--status-active), var(--status-done));
   border-radius: 999px;
   transition: width 0.4s ease;
-  box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 /* Cursor */
