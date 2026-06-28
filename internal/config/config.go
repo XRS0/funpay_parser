@@ -46,7 +46,7 @@ var mu sync.Mutex
 
 func Load() Config {
 	_ = godotenv.Load(".env")
-	dataDir := getenv("DATA_DIR", ".")
+	dataDir := getenv("DATA_DIR", "data")
 	_ = os.MkdirAll(dataDir, 0755)
 	maxPages, _ := strconv.Atoi(getenv("MAX_PAGES", "3"))
 	if maxPages <= 0 {
