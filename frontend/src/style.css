@@ -1103,12 +1103,12 @@ body {
   height: 50vw;
   max-width: 760px;
   max-height: 760px;
-  background: radial-gradient(circle at 50% 50%, rgba(59,130,246,0.55) 0%, rgba(168,85,247,0.22) 45%, transparent 70%);
+  background: radial-gradient(circle at 50% 50%, rgba(59,130,246,0.32) 0%, rgba(168,85,247,0.12) 45%, transparent 70%);
   bottom: -16%;
   right: -12%;
   animation: float-2 26s ease-in-out infinite reverse;
   mix-blend-mode: screen;
-  opacity: 0.45;
+  opacity: 0.24;
 }
 
 .shape-3 {
