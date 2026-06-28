@@ -1125,34 +1125,28 @@ function AdminSettingsPage({ showToast }) {
 function OnboardingModal({ user, onComplete, showToast }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [starterProfile, setStarterProfile] = useState(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runStarted, setRunStarted] = useState(false);
+  const [runStatus, setRunStatus] = useState(null);
+  const [savedResult, setSavedResult] = useState(null);
+  const [telegramSkipped, setTelegramSkipped] = useState(false);
+  const starterProfilePayload = {
+    name: 'Стартовый профиль',
+    query: 'chatgpt plus',
+    category_id: 1355,
+    candidates: 8,
+    max_pages: 1,
+    deep: false,
+  };
   const steps = [
-    {
-      icon: <Search size={24} />,
-      title: 'Что делает сервис',
-      text: 'Он ищет предложения на Funpay, собирает карточки и помогает быстро найти самый выгодный вариант под твой запрос.',
-    },
-    {
-      icon: <SlidersHorizontal size={24} />,
-      title: 'Как начать',
-      text: 'На странице “Парсер” выбери или создай профиль поиска: запрос, категорию, число кандидатов и глубину проверки.',
-    },
-    {
-      icon: <Bot size={24} />,
-      title: 'Что происходит после запуска',
-      text: 'Сервис сам парсит страницы, отфильтровывает лишнее и проверяет кандидатов через классификацию, чтобы не копаться вручную.',
-    },
-    {
-      icon: <Database size={24} />,
-      title: 'Где смотреть результат',
-      text: 'После завершения результат появится в “Сохранёнках”. Там хранятся последние 10 запусков и детали найденных предложений.',
-    },
-    {
-      icon: <CheckCircle2 size={24} />,
-      title: 'Telegram по желанию',
-      text: 'В настройках можно привязать Telegram, чтобы получать персональные отчёты. Это не обязательно для первого запуска.',
-    },
+    { icon: <Bot size={24} />, title: 'Привяжи Telegram', label: 'Telegram' },
+    { icon: <SlidersHorizontal size={24} />, title: 'Стартовый профиль', label: 'Профиль' },
+    { icon: <Play size={24} />, title: 'Запускаем реальный парсинг', label: 'Запуск' },
+    { icon: <Clock size={24} />, title: 'Смотрим процесс', label: 'Статус' },
+    { icon: <Database size={24} />, title: 'Разбираем результат', label: 'Результат' },
   ];
-  const current = steps[step];
   const finish = async () => {
     if (saving) return;
     setSaving(true);
@@ -1165,27 +1159,136 @@ function OnboardingModal({ user, onComplete, showToast }) {
       setSaving(false);
     }
   };
-  const next = () => {
-    if (step >= steps.length - 1) finish();
-    else setStep((v) => v + 1);
+  const createStarterProfile = async () => {
+    if (starterProfile || profileBusy) return starterProfile;
+    setProfileBusy(true);
+    try {
+      const existing = await api('/api/profiles').catch(() => []);
+      const found = Array.isArray(existing) ? existing.find((p) => p.name === starterProfilePayload.name) : null;
+      const profile = found || await api('/api/profiles', { method: 'POST', body: JSON.stringify(starterProfilePayload) });
+      setStarterProfile(profile);
+      showToast?.('Стартовый профиль готов');
+      return profile;
+    } catch (err) {
+      showToast?.(err.message || 'Не удалось создать стартовый профиль', true);
+      return null;
+    } finally {
+      setProfileBusy(false);
+    }
   };
-  return <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-    <div className="onboarding-card reveal visible">
-      <button type="button" className="onboarding-skip" onClick={finish} disabled={saving}>Пропустить</button>
+  const pollRun = useCallback(async () => {
+    try {
+      const st = await api('/status');
+      setRunStatus(st);
+      if (!st.running && (st.cheapest || st.result_summary || st.status === 'Done')) {
+        const saved = await api(`/api/saved_results?profile_id=${starterProfile?.id || st.profile_id || ''}`).catch(() => []);
+        if (Array.isArray(saved) && saved.length) setSavedResult(saved[0]);
+        setStep(4);
+      }
+    } catch { /* keep onboarding alive even if one poll fails */ }
+  }, [starterProfile?.id]);
+  useEffect(() => {
+    if (!runStarted) return undefined;
+    pollRun();
+    const id = window.setInterval(pollRun, 1800);
+    return () => window.clearInterval(id);
+  }, [runStarted, pollRun]);
+  const startRealRun = async () => {
+    if (runBusy) return;
+    setRunBusy(true);
+    try {
+      const profile = starterProfile || await createStarterProfile();
+      if (!profile?.id) return;
+      await api(`/api/profiles/${profile.id}/run`, { method: 'POST' });
+      setRunStarted(true);
+      setStep(3);
+      showToast?.('Стартовый парсинг запущен');
+      window.setTimeout(pollRun, 600);
+    } catch (err) {
+      showToast?.(err.message || 'Не удалось запустить парсинг', true);
+    } finally {
+      setRunBusy(false);
+    }
+  };
+  const next = async () => {
+    if (step === 1 && !starterProfile) {
+      const profile = await createStarterProfile();
+      if (profile) setStep(2);
+      return;
+    }
+    if (step === 2) {
+      await startRealRun();
+      return;
+    }
+    if (step >= steps.length - 1) {
+      await finish();
+      return;
+    }
+    setStep((v) => v + 1);
+  };
+  const latestMessages = safeList(runStatus?.progress).slice(-4);
+  const summary = runStatus?.result_summary || savedResult?.summary;
+  const cheapest = runStatus?.cheapest || savedResult?.cheapest;
+  return <div className="onboarding-overlay practical-onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+    <div className="onboarding-card practical-onboarding-card reveal visible">
+      <button type="button" className="onboarding-skip" onClick={step === 0 ? () => { setTelegramSkipped(true); setStep(1); } : finish} disabled={saving}>{step === 0 ? 'Пропустить Telegram' : 'Пропустить'}</button>
       <div className="onboarding-progress" aria-label={`Шаг ${step + 1} из ${steps.length}`}>
-        {steps.map((_, i) => <span key={i} className={i <= step ? 'active' : ''} />)}
+        {steps.map((item, i) => <span key={item.label} className={i <= step ? 'active' : ''} title={item.label} />)}
       </div>
-      <div className="onboarding-icon">{current.icon}</div>
-      <div className="onboarding-step-label">Шаг {step + 1} из {steps.length}</div>
-      <h2 id="onboarding-title">{current.title}</h2>
-      <p>{current.text}</p>
+      <div className="onboarding-icon">{steps[step].icon}</div>
+      <div className="onboarding-step-label">Шаг {step + 1} из {steps.length} · {steps[step].label}</div>
+      <h2 id="onboarding-title">{steps[step].title}</h2>
+
+      {step === 0 && <div className="onboarding-live-block">
+        <p>Сразу привяжи Telegram, чтобы получать отчёты по своим запускам. Если не хочешь сейчас — нажми “Пропустить Telegram”, парсер всё равно заработает.</p>
+        <TelegramLinkPanel account={user} showToast={showToast} onLinked={(nextUser) => { onComplete(nextUser); showToast?.('Telegram привязан'); setStep(1); }} />
+      </div>}
+
+      {step === 1 && <div className="onboarding-live-block">
+        <p>Я подготовлю безопасный стартовый профиль: один листинг-раунд по ChatGPT Plus, чтобы ты увидел полный путь без ручной настройки.</p>
+        <div className="onboarding-profile-preview">
+          <div><span>Название</span><strong>{starterProfile?.name || starterProfilePayload.name}</strong></div>
+          <div><span>Запрос</span><strong>{starterProfilePayload.query}</strong></div>
+          <div><span>Категория</span><strong>{starterProfilePayload.category_id}</strong></div>
+          <div><span>Объём</span><strong>{starterProfilePayload.candidates} кандидатов · {starterProfilePayload.max_pages} страница</strong></div>
+        </div>
+      </div>}
+
+      {step === 2 && <div className="onboarding-live-block">
+        <p>Теперь запускаем реальный парсинг по стартовому профилю. Это настоящий запуск: сайт соберёт предложения, проверит кандидатов и сохранит результат.</p>
+        <div className="onboarding-note"><Play size={18} />Нажми “Начать”, и я покажу статус выполнения прямо здесь.</div>
+      </div>}
+
+      {step === 3 && <div className="onboarding-live-block">
+        <p>Парсинг идёт. Здесь видно реальные этапы: загрузка Funpay, фильтрация, проверка LLM и сохранение результата.</p>
+        <div className={`onboarding-run-status ${runStatus?.running ? 'active' : ''}`}>
+          <div><span>Статус</span><strong>{runStatus?.status || 'запускается...'}</strong></div>
+          <div><span>Профиль</span><strong>{starterProfile?.name || 'Стартовый профиль'}</strong></div>
+        </div>
+        <div className="onboarding-terminal">
+          {latestMessages.length ? latestMessages.map((p, i) => <div key={`${p.time}-${i}`}><span>{p.time}</span>{p.message}</div>) : <div><span>…</span>Жду первые события запуска</div>}
+        </div>
+      </div>}
+
+      {step === 4 && <div className="onboarding-live-block">
+        <p>Готово — теперь ты знаешь полный путь. Реальный результат можно открыть в “Сохранёнках”, а следующие запуски делать уже своим профилем.</p>
+        <div className="onboarding-result-card">
+          <div><span>Найдено Plus</span><strong>{summary?.total_plus ?? '—'}</strong></div>
+          <div><span>Проверено LLM</span><strong>{summary?.classified ?? '—'}</strong></div>
+          <div><span>Лучшее предложение</span><strong>{cheapest?.title || cheapest?.name || 'смотри сохранёнки'}</strong></div>
+        </div>
+      </div>}
+
       <div className="onboarding-actions">
-        {step > 0 && <button type="button" className="btn btn-ghost" disabled={saving} onClick={() => setStep((v) => Math.max(0, v - 1))}>Назад</button>}
-        <button type="button" className={`btn btn-primary ${saving ? 'btn-loading' : ''}`} disabled={saving} onClick={next}>{step >= steps.length - 1 ? 'Начать' : 'Далее'}</button>
+        {step > 0 && step < 3 && <button type="button" className="btn btn-ghost" disabled={saving || profileBusy || runBusy} onClick={() => setStep((v) => Math.max(0, v - 1))}>Назад</button>}
+        {step === 4 && <button type="button" className="btn btn-secondary" onClick={async () => { await finish(); navigate('/saved'); }}>Открыть сохранёнки</button>}
+        <button type="button" className={`btn btn-primary ${(saving || profileBusy || runBusy) ? 'btn-loading' : ''}`} disabled={saving || profileBusy || runBusy || step === 3} onClick={next}>{step === 1 && !starterProfile ? 'Создать профиль' : step === 2 ? 'Начать' : step === 4 ? 'Начать работу' : 'Далее'}</button>
       </div>
+      {telegramSkipped && step > 0 && <div className="onboarding-footnote">Telegram можно привязать позже в настройках.</div>}
     </div>
   </div>;
 }
+
 
 function LoginPage({ onLogin, showToast }) {
   const [isRegister, setIsRegister] = useState(false);

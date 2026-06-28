@@ -3863,3 +3863,134 @@ body {
   .onboarding-actions { flex-direction: column-reverse; }
   .onboarding-actions .btn { width: 100%; }
 }
+
+/* Practical onboarding: Telegram -> starter profile -> real run -> real result */
+.practical-onboarding-card {
+  width: min(660px, 100%) !important;
+}
+.practical-onboarding .telegram-link-box {
+  margin-top: 18px;
+  align-items: flex-start !important;
+  flex-direction: column !important;
+  overflow: visible !important;
+}
+.practical-onboarding .telegram-code-panel {
+  width: 100%;
+  justify-content: flex-start !important;
+}
+.onboarding-live-block {
+  margin-top: 16px;
+}
+.onboarding-live-block p {
+  margin-top: 0;
+}
+.onboarding-profile-preview,
+.onboarding-run-status,
+.onboarding-result-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.onboarding-profile-preview div,
+.onboarding-run-status div,
+.onboarding-result-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.045);
+}
+.onboarding-profile-preview span,
+.onboarding-run-status span,
+.onboarding-result-card span {
+  color: rgba(255,255,255,0.48);
+  font-size: .76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.onboarding-profile-preview strong,
+.onboarding-run-status strong,
+.onboarding-result-card strong {
+  min-width: 0;
+  max-width: 68%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255,255,255,0.92);
+  text-align: right;
+}
+.onboarding-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 15px;
+  border-radius: 18px;
+  color: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.onboarding-run-status.active strong::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 14px rgba(255,255,255,.75);
+  animation: pulse 1s ease-in-out infinite;
+}
+.onboarding-terminal {
+  min-height: 116px;
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .82rem;
+  color: rgba(255,255,255,0.72);
+}
+.onboarding-terminal div + div { margin-top: 8px; }
+.onboarding-terminal span {
+  display: inline-block;
+  min-width: 58px;
+  color: rgba(255,255,255,0.42);
+}
+.onboarding-footnote {
+  margin-top: 14px;
+  color: rgba(255,255,255,0.42);
+  font-size: .86rem;
+  text-align: right;
+}
+@media (max-width: 560px) {
+  .onboarding-profile-preview div,
+  .onboarding-run-status div,
+  .onboarding-result-card div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .onboarding-profile-preview strong,
+  .onboarding-run-status strong,
+  .onboarding-result-card strong {
+    max-width: 100%;
+    text-align: left;
+  }
+  .onboarding-footnote { text-align: left; }
+}
+
+/* Practical onboarding result polish: keep long real offer titles inside the card */
+.onboarding-result-card div { overflow: hidden; }
+.onboarding-result-card strong {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
