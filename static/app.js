@@ -2,8 +2,11 @@
 (function () {
     'use strict';
 
-    // Track mouse and scroll for the starfield and parallax layers
+    // Global mouse / scroll state used for all parallax.
     let mouseX = 0, mouseY = 0, scrollY = 0;
+    let smoothMouseX = 0, smoothMouseY = 0, smoothScrollY = 0;
+    let velocityMouseX = 0, velocityMouseY = 0, velocityScrollY = 0;
+
     document.addEventListener('mousemove', (e) => {
         mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
         mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
@@ -12,40 +15,42 @@
         scrollY = window.scrollY;
     }, { passive: true });
 
+    // Spring smoothing for the input values so the parallax never stops abruptly.
+    // spring + damping < 1 gives a small overshoot / bounce on settle.
+    const spring = 0.08;
+    const damping = 0.85;
+
+    function smoothInput() {
+        const forceX = (mouseX - smoothMouseX) * spring;
+        const forceY = (mouseY - smoothMouseY) * spring;
+        const forceS = (scrollY - smoothScrollY) * spring;
+
+        velocityMouseX += forceX;
+        velocityMouseY += forceY;
+        velocityScrollY += forceS;
+
+        velocityMouseX *= damping;
+        velocityMouseY *= damping;
+        velocityScrollY *= damping;
+
+        smoothMouseX += velocityMouseX;
+        smoothMouseY += velocityMouseY;
+        smoothScrollY += velocityScrollY;
+    }
+
     // Parallax on mouse move and scroll for elements with .parallax
-    // Uses spring physics so the shapes settle with a small bounce when input stops.
     const parallaxElements = document.querySelectorAll('.parallax');
     if (parallaxElements.length) {
         const layers = Array.from(parallaxElements).map((el) => ({
             el,
             speed: parseFloat(el.dataset.speed) || 0.03,
-            currentX: 0,
-            currentY: 0,
-            velocityX: 0,
-            velocityY: 0,
         }));
-
-        const spring = 0.075;
-        const damping = 0.82; // damping < 1 creates a small overshoot/bounce
-
         function animateParallax() {
             requestAnimationFrame(animateParallax);
             layers.forEach((layer) => {
-                const targetX = mouseX * layer.speed * 60;
-                const targetY = mouseY * layer.speed * 60 + scrollY * layer.speed * 0.4;
-
-                const forceX = (targetX - layer.currentX) * spring;
-                const forceY = (targetY - layer.currentY) * spring;
-
-                layer.velocityX += forceX;
-                layer.velocityY += forceY;
-                layer.velocityX *= damping;
-                layer.velocityY *= damping;
-
-                layer.currentX += layer.velocityX;
-                layer.currentY += layer.velocityY;
-
-                layer.el.style.transform = `translate(${layer.currentX}px, ${layer.currentY}px)`;
+                const moveX = smoothMouseX * layer.speed * 80;
+                const moveY = smoothMouseY * layer.speed * 80 + smoothScrollY * layer.speed * 0.4;
+                layer.el.style.transform = `translate(${moveX}px, ${moveY}px)`;
             });
         }
         animateParallax();
@@ -127,8 +132,8 @@
         }
 
         function drawStar(s) {
-            const parallaxX = mouseX * s.depth * 35;
-            const parallaxY = mouseY * s.depth * 35 + scrollY * s.depth * 0.3;
+            const parallaxX = smoothMouseX * s.depth * 40;
+            const parallaxY = smoothMouseY * s.depth * 40 + smoothScrollY * s.depth * 0.3;
             const x = (s.baseX + parallaxX + width) % width;
             const y = (s.baseY + parallaxY + height) % height;
 
@@ -183,6 +188,8 @@
         const frameInterval = 16; // ~60 fps for smooth animation
         function animate(timestamp) {
             requestAnimationFrame(animate);
+            // Smooth input once per frame so both stars and glow shapes share the same eased motion.
+            smoothInput();
             if (timestamp - lastFrame < frameInterval) return;
             lastFrame = timestamp;
 
