@@ -402,6 +402,8 @@ func (s *Server) results(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	respond := func() {
+		userID := requestUserID(r)
+		userTelegramChatID := s.telegramChatIDForUser(r.Context(), userID)
 		key := s.cfg.EffectiveAPIKey()
 		set := config.LoadSettings(s.cfg.SettingsFile)
 		tgToken := s.cfg.EffectiveTelegramBotToken()
@@ -420,13 +422,13 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			"llm_api_key":            maskSecret(key),
 			"telegram_has_token":     tgToken != "",
 			"telegram_bot_token":     maskSecret(tgToken),
-			"telegram_chat_id":       set.TelegramChatID,
+			"telegram_chat_id":       userTelegramChatID,
 			"telegram_bot_username":  botUsername,
 			"telegram_proxy":         set.TelegramProxy,
 			"telegram_proxy_active":  s.cfg.EffectiveTelegramProxyURL() != "",
 			"funpay_proxy":           set.FunpayProxy,
 			"funpay_proxy_active":    s.cfg.EffectiveFunpayProxyURL() != "",
-			"telegram_notifications": tgToken != "" && set.TelegramChatID != "",
+			"telegram_notifications": tgToken != "" && userTelegramChatID != "",
 		})
 	}
 	switch r.Method {
@@ -507,10 +509,14 @@ func (s *Server) telegramTest(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	chatID := s.cfg.EffectiveTelegramChatID()
+	chatID := s.telegramChatIDForUser(r.Context(), requestUserID(r))
+	if chatID == "" {
+		jsonOut(w, map[string]string{"error": "Telegram не привязан к вашему аккаунту. Откройте профиль, получите код и отправьте /start в боте."}, 400)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
-	err := telegram.NewWithProxy(s.cfg.EffectiveTelegramBotToken(), s.cfg.EffectiveTelegramProxyURL()).SendMessage(ctx, chatID, "✅ Funpay Parser: тестовое уведомление работает.")
+	err := telegram.NewWithProxy(s.cfg.EffectiveTelegramBotToken(), s.cfg.EffectiveTelegramProxyURL()).SendMessage(ctx, chatID, "✅ Funpay Parser: персональные уведомления для вашего аккаунта работают.")
 	if err != nil {
 		jsonOut(w, map[string]string{"error": err.Error()}, 400)
 		return
@@ -531,7 +537,11 @@ func (s *Server) notifyTelegram(userID int64, res runner.Result) {
 	}
 	token := s.cfg.EffectiveTelegramBotToken()
 	chatID := s.telegramChatIDForUser(context.Background(), userID)
-	if chatID == "" {
+	if s.cfg.AuthEnabled && userID > 0 && chatID == "" {
+		log.Println("telegram notification skipped: user has no linked Telegram chat")
+		return
+	}
+	if !s.cfg.AuthEnabled && chatID == "" {
 		chatID = s.cfg.EffectiveTelegramChatID()
 	}
 	if token == "" || chatID == "" {
