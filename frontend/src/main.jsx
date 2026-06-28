@@ -305,6 +305,30 @@ function Field({ label, children }) {
   );
 }
 
+function AnimatedMetricValue({ value, pulseKey, className = '' }) {
+  const numeric = Number(value) || 0;
+  const [display, setDisplay] = useState(numeric);
+
+  useEffect(() => {
+    const from = display;
+    const to = numeric;
+    if (from === to) return undefined;
+    const start = performance.now();
+    const duration = 520;
+    let frame = 0;
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [numeric]);
+
+  return <span key={pulseKey} className={`metric-value metric-value-animated ${className}`}>{display}</span>;
+}
+
 function StatusPipeline({ progress }) {
   const text = progress.map((p) => p.message || '').join('\n').toLowerCase();
   const steps = [
@@ -317,21 +341,31 @@ function StatusPipeline({ progress }) {
   const activeIndex = text.includes('classifying') || text.includes('llm') ? 3 : text.includes('limited') || text.includes('candidate') ? 2 : text.includes('filtered') ? 1 : text.includes('found') || text.includes('fetch') ? 0 : -1;
   const progressPct = Math.max(8, ((activeIndex + 1) / steps.length) * 100);
   const metrics = useMemo(() => {
-    const joined = progress.map((p) => p.message || '').join(' ');
+    const messages = progress.map((p) => p.message || '');
+    const joined = messages.join(' ');
+    const llmDone = messages.filter((m) => /^\[LLM\]/.test(m.trim())).length;
+    const candidates =
+      joined.match(/Limited LLM candidates to (\d+)/)?.[1]
+      || joined.match(/Sending (\d+) filtered listings to LLM/)?.[1]
+      || '0';
+    const summaryClassified = joined.match(/classified[\s\":]+(\d+)/i)?.[1];
     return {
-      listings: joined.match(/Found (\d+) listings/)?.[1] || '0',
-      candidates: joined.match(/Limited LLM candidates to (\d+)/)?.[1] || '0',
-      classified: joined.match(/Classified (\d+)/)?.[1] || '0',
+      listings: Number(joined.match(/Found (\d+) listings/)?.[1] || 0),
+      candidates: Number(candidates),
+      classified: Number(summaryClassified || llmDone || 0),
+      llmDone,
     };
   }, [progress]);
+  const llmPercent = metrics.candidates > 0 ? Math.min(100, Math.round((metrics.classified / metrics.candidates) * 100)) : 0;
+  const llmActive = activeIndex >= 3 && metrics.candidates > 0 && metrics.classified < metrics.candidates;
 
   return (
     <div className="status-loader">
       <div className="status-dashboard">
         <div className="status-metrics">
-          <div className="metric"><span className="metric-value">{metrics.listings}</span><span className="metric-label">Лотов</span></div>
-          <div className="metric"><span className="metric-value">{metrics.candidates}</span><span className="metric-label">Кандидатов</span></div>
-          <div className="metric"><span className="metric-value">{metrics.classified}</span><span className="metric-label">Проверено LLM</span></div>
+          <div className="metric"><AnimatedMetricValue value={metrics.listings} pulseKey={`listings-${metrics.listings}`} /><span className="metric-label">Лотов</span></div>
+          <div className="metric"><AnimatedMetricValue value={metrics.candidates} pulseKey={`candidates-${metrics.candidates}`} /><span className="metric-label">Кандидатов</span></div>
+          <div className={`metric metric-llm ${llmActive ? 'active live' : metrics.classified > 0 ? 'done' : ''}`} style={{ '--llm-progress': `${llmPercent}%` }}><AnimatedMetricValue value={metrics.classified} pulseKey={`classified-${metrics.classified}`} className="metric-value-llm" /><span className="metric-label">Проверено LLM</span><span className="metric-subline">{metrics.candidates ? `${llmPercent}% из ${metrics.candidates}` : 'ожидание'}</span></div>
         </div>
         <div className="status-pipeline">
           {steps.map(([key, label, Icon], idx) => (

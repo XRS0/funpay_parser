@@ -2580,3 +2580,88 @@ select,
 .selected-profile-grid div {
   background: rgba(5, 5, 7, 0.76);
 }
+
+/* Realtime LLM counter polish */
+.metric {
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-value-animated {
+  transition: transform 0.22s ease, text-shadow 0.22s ease, color 0.22s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-value-animated:not(:empty) {
+  animation: metric-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.metric-llm {
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) var(--llm-progress, 0%), transparent var(--llm-progress, 0%)),
+    rgba(0, 0, 0, 0.2);
+}
+
+.metric-llm::before {
+  content: '';
+  position: absolute;
+  inset: -45% -35%;
+  z-index: -1;
+  opacity: 0;
+  background: conic-gradient(from 180deg, transparent 0deg, rgba(255,255,255,0.34) 70deg, transparent 145deg, rgba(59,130,246,0.18) 210deg, transparent 300deg);
+  filter: blur(18px);
+  animation: llm-orbit 2.6s linear infinite;
+  transition: opacity 0.25s ease;
+}
+
+.metric-llm::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  width: var(--llm-progress, 0%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.92), rgba(59,130,246,0.95), rgba(255,255,255,0.92));
+  box-shadow: 0 0 18px rgba(255,255,255,0.42);
+  transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.metric-llm.live {
+  border-color: rgba(255,255,255,0.5);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 16px 42px rgba(0,0,0,0.42), 0 0 34px rgba(255,255,255,0.12);
+}
+
+.metric-llm.live::before {
+  opacity: 1;
+}
+
+.metric-llm.live .metric-value-llm {
+  color: #fff;
+  text-shadow: 0 0 18px rgba(255,255,255,0.52), 0 0 36px rgba(59,130,246,0.28);
+}
+
+.metric-llm.done {
+  border-color: rgba(255,255,255,0.28);
+}
+
+.metric-subline {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@keyframes metric-pop {
+  0% { transform: translateY(8px) scale(0.92); opacity: 0.55; }
+  55% { transform: translateY(-2px) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes llm-orbit {
+  to { transform: rotate(360deg); }
+}
