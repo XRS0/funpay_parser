@@ -1121,6 +1121,72 @@ function AdminSettingsPage({ showToast }) {
 }
 
 
+
+function OnboardingModal({ user, onComplete, showToast }) {
+  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const steps = [
+    {
+      icon: <Search size={24} />,
+      title: 'Что делает сервис',
+      text: 'Он ищет предложения на Funpay, собирает карточки и помогает быстро найти самый выгодный вариант под твой запрос.',
+    },
+    {
+      icon: <SlidersHorizontal size={24} />,
+      title: 'Как начать',
+      text: 'На странице “Парсер” выбери или создай профиль поиска: запрос, категорию, число кандидатов и глубину проверки.',
+    },
+    {
+      icon: <Bot size={24} />,
+      title: 'Что происходит после запуска',
+      text: 'Сервис сам парсит страницы, отфильтровывает лишнее и проверяет кандидатов через классификацию, чтобы не копаться вручную.',
+    },
+    {
+      icon: <Database size={24} />,
+      title: 'Где смотреть результат',
+      text: 'После завершения результат появится в “Сохранёнках”. Там хранятся последние 10 запусков и детали найденных предложений.',
+    },
+    {
+      icon: <CheckCircle2 size={24} />,
+      title: 'Telegram по желанию',
+      text: 'В настройках можно привязать Telegram, чтобы получать персональные отчёты. Это не обязательно для первого запуска.',
+    },
+  ];
+  const current = steps[step];
+  const finish = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const updated = await api('/api/auth/onboarding', { method: 'POST', authRedirect: false });
+      onComplete(updated || { ...user, onboardingCompleted: true });
+    } catch (err) {
+      showToast?.(err.message || 'Не удалось сохранить onboarding', true);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const next = () => {
+    if (step >= steps.length - 1) finish();
+    else setStep((v) => v + 1);
+  };
+  return <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+    <div className="onboarding-card reveal visible">
+      <button type="button" className="onboarding-skip" onClick={finish} disabled={saving}>Пропустить</button>
+      <div className="onboarding-progress" aria-label={`Шаг ${step + 1} из ${steps.length}`}>
+        {steps.map((_, i) => <span key={i} className={i <= step ? 'active' : ''} />)}
+      </div>
+      <div className="onboarding-icon">{current.icon}</div>
+      <div className="onboarding-step-label">Шаг {step + 1} из {steps.length}</div>
+      <h2 id="onboarding-title">{current.title}</h2>
+      <p>{current.text}</p>
+      <div className="onboarding-actions">
+        {step > 0 && <button type="button" className="btn btn-ghost" disabled={saving} onClick={() => setStep((v) => Math.max(0, v - 1))}>Назад</button>}
+        <button type="button" className={`btn btn-primary ${saving ? 'btn-loading' : ''}`} disabled={saving} onClick={next}>{step >= steps.length - 1 ? 'Начать' : 'Далее'}</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function LoginPage({ onLogin, showToast }) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
@@ -1275,7 +1341,8 @@ function App() {
   if (path === '/settings') page = <SettingsPage showToast={showToast} onLogout={logout} />;
   if (path === '/profile') page = <ProfilePage showToast={showToast} user={currentUser} onUserUpdate={setCurrentUser} />;
   if (path === '/admin') page = <AdminSettingsPage showToast={showToast} />;
-  return <><Background /><div className='app'><Header user={currentUser} />{page}</div><Toast toast={toast} /></>;
+  const showOnboarding = currentUser && currentUser.onboardingCompleted !== true;
+  return <><Background /><div className='app'><Header user={currentUser} />{page}</div>{showOnboarding && <OnboardingModal user={currentUser} showToast={showToast} onComplete={(u) => setCurrentUser(u)} />}<Toast toast={toast} /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

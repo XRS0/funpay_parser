@@ -14,15 +14,16 @@ import (
 type Store struct{ DB *sql.DB }
 
 type User struct {
-	ID               int64  `json:"id"`
-	Name             string `json:"name"`
-	Email            string `json:"email"`
-	Role             string `json:"role"`
-	TelegramUserID   int64  `json:"telegram_user_id,omitempty"`
-	TelegramChatID   int64  `json:"telegram_chat_id,omitempty"`
-	TelegramUsername string `json:"telegram_username,omitempty"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+	ID                  int64  `json:"id"`
+	Name                string `json:"name"`
+	Email               string `json:"email"`
+	Role                string `json:"role"`
+	TelegramUserID      int64  `json:"telegram_user_id,omitempty"`
+	TelegramChatID      int64  `json:"telegram_chat_id,omitempty"`
+	TelegramUsername    string `json:"telegram_username,omitempty"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
+	OnboardingCompleted bool   `json:"onboardingCompleted"`
 }
 
 func Open(path string) (*Store, error) {
@@ -47,6 +48,7 @@ func (s *Store) Init(ctx context.Context) error {
 			telegram_username TEXT NULL,
 			telegram_link_code TEXT NULL UNIQUE,
 			telegram_link_expires_at TEXT NULL,
+			onboarding_completed INTEGER NOT NULL DEFAULT 1,
 			created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 			updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -70,6 +72,7 @@ func (s *Store) Init(ctx context.Context) error {
 		`ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN telegram_link_code TEXT NULL`,
 		`ALTER TABLE users ADD COLUMN telegram_link_expires_at TEXT NULL`,
+		`ALTER TABLE users ADD COLUMN onboarding_completed INTEGER NOT NULL DEFAULT 1`,
 		`CREATE INDEX IF NOT EXISTS idx_users_telegram_link_code ON users(telegram_link_code)`,
 	}
 	for _, st := range migrations {
@@ -88,21 +91,22 @@ func (s *Store) CreateUser(ctx context.Context, name, email, password string) (U
 	if name == "" {
 		name = email
 	}
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO users(name, email, password_hash, role, created_at, updated_at) VALUES(?,?,?,?,?,?)`, name, email, string(hash), "user", now, now)
+	res, err := s.DB.ExecContext(ctx, `INSERT INTO users(name, email, password_hash, role, onboarding_completed, created_at, updated_at) VALUES(?,?,?,?,?,?,?)`, name, email, string(hash), "user", 0, now, now)
 	if err != nil {
 		return User{}, err
 	}
 	id, _ := res.LastInsertId()
-	return User{ID: id, Name: name, Email: email, Role: "user", CreatedAt: now, UpdatedAt: now}, nil
+	return User{ID: id, Name: name, Email: email, Role: "user", CreatedAt: now, UpdatedAt: now, OnboardingCompleted: false}, nil
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, string, error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT id, name, email, role, telegram_user_id, telegram_chat_id, telegram_username, created_at, updated_at, password_hash FROM users WHERE email=?`, email)
+	row := s.DB.QueryRowContext(ctx, `SELECT id, name, email, role, telegram_user_id, telegram_chat_id, telegram_username, created_at, updated_at, onboarding_completed, password_hash FROM users WHERE email=?`, email)
 	var u User
 	var hash string
 	var tuid, tcid sql.NullInt64
 	var tname sql.NullString
-	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &tuid, &tcid, &tname, &u.CreatedAt, &u.UpdatedAt, &hash)
+	var onboarding int
+	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &tuid, &tcid, &tname, &u.CreatedAt, &u.UpdatedAt, &onboarding, &hash)
 	if err == sql.ErrNoRows {
 		return User{}, "", sql.ErrNoRows
 	}
@@ -118,15 +122,17 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, string,
 	if tname.Valid {
 		u.TelegramUsername = tname.String
 	}
+	u.OnboardingCompleted = onboarding != 0
 	return u, hash, nil
 }
 
 func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT id, name, email, role, telegram_user_id, telegram_chat_id, telegram_username, created_at, updated_at FROM users WHERE id=?`, id)
+	row := s.DB.QueryRowContext(ctx, `SELECT id, name, email, role, telegram_user_id, telegram_chat_id, telegram_username, created_at, updated_at, onboarding_completed FROM users WHERE id=?`, id)
 	var u User
 	var tuid, tcid sql.NullInt64
 	var tname sql.NullString
-	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &tuid, &tcid, &tname, &u.CreatedAt, &u.UpdatedAt)
+	var onboarding int
+	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &tuid, &tcid, &tname, &u.CreatedAt, &u.UpdatedAt, &onboarding)
 	if err == sql.ErrNoRows {
 		return User{}, sql.ErrNoRows
 	}
@@ -142,6 +148,7 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 	if tname.Valid {
 		u.TelegramUsername = tname.String
 	}
+	u.OnboardingCompleted = onboarding != 0
 	return u, nil
 }
 
@@ -156,7 +163,7 @@ func (s *Store) LinkTelegram(ctx context.Context, userID int64, telegramUserID i
 
 func (s *Store) UpsertTelegramUser(ctx context.Context, telegramUserID, chatID int64, username string) (User, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO users(name, email, role, telegram_user_id, telegram_chat_id, telegram_username, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(telegram_user_id) DO UPDATE SET telegram_chat_id=excluded.telegram_chat_id, telegram_username=excluded.telegram_username, updated_at=excluded.updated_at`, telegramName(username, telegramUserID), fmt.Sprintf("tg_%d", telegramUserID), "user", telegramUserID, chatID, username, now, now)
+	res, err := s.DB.ExecContext(ctx, `INSERT INTO users(name, email, role, telegram_user_id, telegram_chat_id, telegram_username, onboarding_completed, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(telegram_user_id) DO UPDATE SET telegram_chat_id=excluded.telegram_chat_id, telegram_username=excluded.telegram_username, updated_at=excluded.updated_at`, telegramName(username, telegramUserID), fmt.Sprintf("tg_%d", telegramUserID), "user", telegramUserID, chatID, username, 0, now, now)
 	if err != nil {
 		return User{}, err
 	}
@@ -237,6 +244,15 @@ func telegramName(username string, id int64) string {
 		return "@" + username
 	}
 	return fmt.Sprintf("Telegram %d", id)
+}
+
+func (s *Store) CompleteOnboarding(ctx context.Context, userID int64) (User, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.DB.ExecContext(ctx, `UPDATE users SET onboarding_completed=1, updated_at=? WHERE id=?`, now, userID)
+	if err != nil {
+		return User{}, err
+	}
+	return s.GetUserByID(ctx, userID)
 }
 
 func (s *Store) SaveRefreshToken(ctx context.Context, tokenID string, userID int64, tokenHash string, expiresAt time.Time) error {

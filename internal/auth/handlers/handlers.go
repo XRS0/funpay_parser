@@ -411,6 +411,20 @@ func (h *Handler) TelegramConfirmCode(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, user, 200)
 }
 
+func (h *Handler) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.NotFound(w, r)
+		return
+	}
+	claims := r.Context().Value("claims").(*jwt.Claims)
+	user, err := h.store.CompleteOnboarding(r.Context(), claims.UserID)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": "failed to complete onboarding"}, 500)
+		return
+	}
+	jsonOut(w, user, 200)
+}
+
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
@@ -549,6 +563,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("/api/auth/telegram/link-code", h.AuthMiddleware(http.HandlerFunc(h.TelegramLinkCode)))
 	mux.Handle("/api/auth/telegram/confirm-code", h.AuthMiddleware(http.HandlerFunc(h.TelegramConfirmCode)))
 	mux.Handle("/api/auth/password", h.AuthMiddleware(http.HandlerFunc(h.ChangePassword)))
+	mux.Handle("/api/auth/onboarding", h.AuthMiddleware(http.HandlerFunc(h.CompleteOnboarding)))
 	mux.Handle("/api/auth/me", h.AuthMiddleware(http.HandlerFunc(h.Me)))
 	return mux
 }
