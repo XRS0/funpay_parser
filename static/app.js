@@ -16,9 +16,9 @@
     }, { passive: true });
 
     // Spring smoothing for the input values so the parallax never stops abruptly.
-    // spring + damping < 1 gives a small overshoot / bounce on settle.
+    // damping < 1 gives a tiny overshoot / bounce on settle; higher damping = less bounce.
     const spring = 0.08;
-    const damping = 0.85;
+    const damping = 0.92;
 
     function smoothInput() {
         const forceX = (mouseX - smoothMouseX) * spring;
