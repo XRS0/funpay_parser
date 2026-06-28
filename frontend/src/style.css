@@ -3423,3 +3423,88 @@ body {
   }
   .profile-chip { grid-area: profile !important; }
 }
+
+/* Header v4: centered compact cluster, not stretched across the whole page */
+.app-header {
+  width: fit-content !important;
+  max-width: calc(100vw - 40px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  justify-content: center !important;
+  grid-template-columns: max-content max-content max-content !important;
+  grid-template-areas: 'brand tabs profile' !important;
+}
+.app-header .brand {
+  grid-area: brand !important;
+  width: auto !important;
+  max-width: min(420px, 34vw) !important;
+}
+.header-actions {
+  grid-area: tabs !important;
+  width: fit-content !important;
+  max-width: min(100%, 560px) !important;
+  justify-self: center !important;
+  justify-content: center !important;
+}
+.profile-chip { grid-area: profile !important; }
+@media (max-width: 1240px) {
+  .app-header {
+    width: fit-content !important;
+    max-width: calc(100vw - 40px) !important;
+    grid-template-columns: minmax(0, max-content) max-content !important;
+    grid-template-areas: 'brand profile' 'tabs tabs' !important;
+    justify-content: center !important;
+    justify-items: center !important;
+    row-gap: 14px !important;
+  }
+  .app-header .brand {
+    justify-self: end !important;
+    max-width: min(520px, calc(100vw - 300px)) !important;
+  }
+  .profile-chip { justify-self: start !important; }
+  .header-actions {
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-self: center !important;
+    justify-content: center !important;
+  }
+}
+@media (max-width: 700px) {
+  .app-header {
+    max-width: calc(100vw - 24px) !important;
+    column-gap: 10px !important;
+  }
+  .app-header .brand {
+    max-width: calc(100vw - 230px) !important;
+  }
+  .header-actions {
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-content: flex-start !important;
+  }
+}
+@media (max-width: 520px) {
+  .app-header .brand { max-width: calc(100vw - 190px) !important; }
+  .profile-chip { max-width: 132px !important; }
+}
+
+/* Header v5: keep the compact header centered without clipping the title row */
+@media (max-width: 1240px) {
+  .app-header {
+    width: min(760px, calc(100vw - 40px)) !important;
+    max-width: calc(100vw - 40px) !important;
+  }
+  .app-header .brand {
+    justify-self: start !important;
+    max-width: min(500px, calc(100vw - 300px)) !important;
+  }
+  .profile-chip { justify-self: end !important; }
+  .header-actions { justify-self: center !important; }
+}
+@media (max-width: 700px) {
+  .app-header {
+    width: min(620px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+  .app-header .brand { max-width: calc(100vw - 230px) !important; }
+}
