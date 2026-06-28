@@ -832,7 +832,7 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
       setLinkInfo(d);
       openTelegram(d);
       startPolling(d.code);
-      showToast('Открыл Telegram. Нажми Start в боте — сайт подхватит привязку сам.');
+      showToast('Открыл Telegram по deep link. Нажми Start в боте — сайт подхватит привязку сам.');
     } catch (err) { showToast(err.message, true); }
     finally { setBusy(false); }
   };
@@ -840,13 +840,11 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
   return <div className='telegram-link-box'>
     <div>
       <div className='telegram-link-title'>{account?.telegram_chat_id ? 'Telegram привязан' : 'Привязка Telegram'}</div>
-      <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : account?.telegram_chat_id ? `Chat ID ${account.telegram_chat_id}` : 'Одна кнопка откроет бота. В Telegram нажми обычный Start, код передастся скрытым start-параметром.'}</div>
+      <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : account?.telegram_chat_id ? `Chat ID ${account.telegram_chat_id}` : 'Одна кнопка откроет Telegram с готовым start-параметром. В боте останется только нажать Start — сайт сам подхватит привязку.'}</div>
     </div>
-    {linkInfo ? <div className='telegram-code-panel'>
-      <code>{linkInfo.start_command || '/start'}</code>
-      <span>{polling ? 'Жду Start в Telegram…' : 'Можно открыть бота ещё раз'}</span>
-      <button className='btn btn-secondary btn-sm' disabled={busy || !linkInfo.deep_link} onClick={() => openTelegram(linkInfo)}>Открыть Telegram</button>
-      <button className='btn btn-primary btn-sm' disabled={busy} onClick={() => confirmCode(linkInfo.code)}>Проверить</button>
+    {linkInfo ? <div className='telegram-deeplink-panel'>
+      <span>{polling ? 'Жду Start в Telegram…' : 'Можно открыть Telegram ещё раз'}</span>
+      <button className='btn btn-secondary btn-sm' disabled={busy || !linkInfo.deep_link} onClick={() => { openTelegram(linkInfo); startPolling(linkInfo.code); }}>Открыть Telegram</button>
     </div> : <button className='btn btn-secondary btn-sm' disabled={busy} onClick={createCode}>{account?.telegram_chat_id ? 'Перепривязать Telegram' : 'Войти через Telegram'}</button>}
   </div>;
 }

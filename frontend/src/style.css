@@ -3994,3 +3994,21 @@ body {
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* Telegram deep link panel: no manual /start code or confirm button */
+.telegram-deeplink-panel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.telegram-deeplink-panel span {
+  color: var(--text-3);
+  font-size: 0.86rem;
+}
+.user-settings-page .telegram-deeplink-panel,
+.practical-onboarding .telegram-deeplink-panel {
+  width: 100% !important;
+  justify-content: flex-start !important;
+}
