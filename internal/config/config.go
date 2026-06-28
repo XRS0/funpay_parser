@@ -35,6 +35,11 @@ type Config struct {
 	ParserServiceAddr string
 	LLMServiceAddr    string
 	Port              string
+	AuthJWTSecret     string
+	AuthServiceAddr   string
+	AuthDatabasePath  string
+	AuthCookieHost    string
+	AuthEnabled       bool
 }
 
 var mu sync.Mutex
@@ -70,6 +75,11 @@ func Load() Config {
 		ParserServiceAddr: getenv("PARSER_SERVICE_ADDR", ""),
 		LLMServiceAddr:    getenv("LLM_SERVICE_ADDR", ""),
 		Port:              getenv("PORT", "5000"),
+		AuthJWTSecret:     os.Getenv("AUTH_JWT_SECRET"),
+		AuthServiceAddr:   getenv("AUTH_SERVICE_ADDR", ""),
+		AuthDatabasePath:  getenv("AUTH_DATABASE_PATH", filepath.Join(dataDir, "auth.db")),
+		AuthCookieHost:    getenv("AUTH_COOKIE_HOST", ""),
+		AuthEnabled:       os.Getenv("AUTH_JWT_SECRET") != "",
 	}
 }
 

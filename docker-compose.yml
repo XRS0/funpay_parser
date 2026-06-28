@@ -1,4 +1,22 @@
 services:
+  auth-service:
+    build:
+      context: .
+      args:
+        SERVICE: auth-service
+    environment:
+      - DATA_DIR=/app/data
+      - AUTH_DATABASE_PATH=/app/data/auth.db
+      - AUTH_HTTP_ADDR=:5001
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-change-me-local-auth-secret}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - AUTH_COOKIE_HOST=${AUTH_COOKIE_HOST:-}
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "5001"
+    restart: unless-stopped
+
   kafka:
     image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
     command:
@@ -87,10 +105,7 @@ services:
       - kafka
       - parser-service
       - telegram-service
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data:/app/data
+      - auth-service
     environment:
       - DATA_DIR=/app/data
       - DATABASE_PATH=/app/data/parser.db
@@ -106,6 +121,13 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - TELEGRAM_PROXY=${TELEGRAM_PROXY:-}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-change-me-local-auth-secret}
+      - AUTH_SERVICE_ADDR=http://auth-service:5001
+      - AUTH_COOKIE_HOST=${AUTH_COOKIE_HOST:-}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
 
 volumes:

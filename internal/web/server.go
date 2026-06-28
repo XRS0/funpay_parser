@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +16,9 @@ import (
 	"sync"
 	"time"
 
+	authhandlers "funpay-parser/internal/auth/handlers"
+	authjwt "funpay-parser/internal/auth/jwt"
+	authstore "funpay-parser/internal/auth/store"
 	"funpay-parser/internal/config"
 	"funpay-parser/internal/events"
 	"funpay-parser/internal/rpc"
@@ -45,10 +50,40 @@ type Server struct {
 	cancel        context.CancelFunc
 	parserRunner  parserRunner
 	dealPublisher *events.Publisher
+	jwt           *authjwt.Manager
+	authProxy     *httputil.ReverseProxy
+	authHandler   http.Handler
 }
 
 func New(cfg config.Config, st *store.Store) *Server {
 	s := &Server{cfg: cfg, st: st, mux: http.NewServeMux(), state: RunState{Status: "idle", Progress: []map[string]string{}}}
+	if cfg.AuthEnabled {
+		s.jwt = authjwt.NewManager(cfg.AuthJWTSecret)
+		if cfg.AuthServiceAddr != "" {
+			if u, err := url.Parse(cfg.AuthServiceAddr); err == nil {
+				s.authProxy = httputil.NewSingleHostReverseProxy(u)
+				log.Println("api: auth proxy configured to", cfg.AuthServiceAddr)
+			} else {
+				log.Println("api: invalid AUTH_SERVICE_ADDR, using local auth handler:", err)
+			}
+		}
+		if s.authProxy == nil {
+			if err := os.MkdirAll(filepath.Dir(cfg.AuthDatabasePath), 0755); err != nil {
+				log.Println("api: failed to create auth data directory:", err)
+			} else if ast, err := authstore.Open(cfg.AuthDatabasePath); err != nil {
+				log.Println("api: failed to open local auth store:", err)
+			} else {
+				s.authHandler = authhandlers.New(authhandlers.Config{
+					Store:      ast,
+					JWTManager: s.jwt,
+					BotToken:   cfg.EffectiveTelegramBotToken(),
+					CookieHost: cfg.AuthCookieHost,
+				}).Routes()
+				log.Println("api: local auth handler configured with", cfg.AuthDatabasePath)
+			}
+		}
+		log.Println("api: JWT auth enabled")
+	}
 	if cfg.ParserServiceAddr != "" {
 		if pc, err := rpc.DialParser(cfg.ParserServiceAddr); err == nil {
 			s.parserRunner = pc
@@ -94,20 +129,65 @@ func (s *Server) schedulerLoop() {
 	}
 }
 
+func (s *Server) protected(next http.HandlerFunc) http.HandlerFunc {
+	if !s.cfg.AuthEnabled || s.jwt == nil {
+		return next
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := ""
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			parts := strings.SplitN(auth, " ", 2)
+			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+				token = parts[1]
+			}
+		}
+		if token == "" {
+			if c, err := r.Cookie("access_token"); err == nil {
+				token = c.Value
+			}
+		}
+		if token == "" {
+			jsonOut(w, map[string]string{"error": "authorization required"}, 401)
+			return
+		}
+		claims, err := s.jwt.ValidateAccess(token)
+		if err != nil {
+			jsonOut(w, map[string]string{"error": "invalid or expired token"}, 401)
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), "claims", claims)))
+	}
+}
+
 func (s *Server) routes() {
-	s.mux.HandleFunc("/run", s.run)
-	s.mux.HandleFunc("/status", s.status)
-	s.mux.HandleFunc("/stop", s.stop)
-	s.mux.HandleFunc("/results", s.results)
-	s.mux.HandleFunc("/api/settings", s.settings)
-	s.mux.HandleFunc("/api/telegram/sync", s.telegramSync)
-	s.mux.HandleFunc("/api/telegram/test", s.telegramTest)
-	s.mux.HandleFunc("/api/profiles", s.profiles)
-	s.mux.HandleFunc("/api/profiles/", s.profileByID)
-	s.mux.HandleFunc("/api/saved_results", s.saved)
-	s.mux.HandleFunc("/api/saved_results/", s.savedByID)
-	s.mux.HandleFunc("/api/schedules", s.schedules)
-	s.mux.HandleFunc("/api/schedules/", s.scheduleByID)
+	if s.cfg.AuthEnabled {
+		if s.authProxy != nil {
+			s.mux.Handle("/api/auth/", s.authProxy)
+		} else if s.authHandler != nil {
+			s.mux.Handle("/api/auth/", s.authHandler)
+		}
+	} else {
+		s.mux.HandleFunc("/api/auth/config", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.NotFound(w, r)
+				return
+			}
+			jsonOut(w, map[string]any{"auth_enabled": false, "telegram_login_enabled": false})
+		})
+	}
+	s.mux.HandleFunc("/run", s.protected(s.run))
+	s.mux.HandleFunc("/status", s.protected(s.status))
+	s.mux.HandleFunc("/stop", s.protected(s.stop))
+	s.mux.HandleFunc("/results", s.protected(s.results))
+	s.mux.HandleFunc("/api/settings", s.protected(s.settings))
+	s.mux.HandleFunc("/api/telegram/sync", s.protected(s.telegramSync))
+	s.mux.HandleFunc("/api/telegram/test", s.protected(s.telegramTest))
+	s.mux.HandleFunc("/api/profiles", s.protected(s.profiles))
+	s.mux.HandleFunc("/api/profiles/", s.protected(s.profileByID))
+	s.mux.HandleFunc("/api/saved_results", s.protected(s.saved))
+	s.mux.HandleFunc("/api/saved_results/", s.protected(s.savedByID))
+	s.mux.HandleFunc("/api/schedules", s.protected(s.schedules))
+	s.mux.HandleFunc("/api/schedules/", s.protected(s.scheduleByID))
 	s.mux.HandleFunc("/", s.spa)
 }
 

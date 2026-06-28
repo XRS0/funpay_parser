@@ -30,16 +30,27 @@ const defaultModels = {
 
 const presets = ['chatgpt plus', 'chatgpt team', 'midjourney', 'netflix'];
 
+function getAuthToken() { return localStorage.getItem('access_token') || ''; }
+function setAuthToken(t) { localStorage.setItem('access_token', t); }
+function clearAuthToken() { localStorage.removeItem('access_token'); }
+
 async function api(path, options = {}) {
-  const resp = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const { authRedirect = true, ...fetchOptions } = options;
+  const headers = { ...(fetchOptions.headers || {}) };
+  if (fetchOptions.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const resp = await fetch(path, { ...fetchOptions, headers });
   const text = await resp.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = { error: text }; }
+  }
+  if (resp.status === 401 && authRedirect) {
+    clearAuthToken();
+    window.location.reload();
+    return null;
+  }
   if (!resp.ok) {
     throw new Error(data?.error || `HTTP ${resp.status}`);
   }
@@ -277,16 +288,17 @@ function NavButton({ to, children, icon }) {
   );
 }
 
-function Header({ title = 'Funpay Parser', subtitle = 'мабой' }) {
+function Header({ title = 'Funpay Parser', subtitle = 'мабой', onLogout }) {
   const path = currentPath();
   return (
-    <header className="app-header">
+    <header className='app-header'>
       <Brand title={title} subtitle={subtitle} />
-      <div className="header-actions">
-        {path !== '/scheduler' && <NavButton to="/scheduler" icon={<Clock size={18} />}>Расписание</NavButton>}
-        {path !== '/saved' && <NavButton to="/saved" icon={<Database size={18} />}>Сохранённые результаты</NavButton>}
-        {path !== '/settings' && <NavButton to="/settings" icon={<SettingsIcon size={18} />}>Настройки</NavButton>}
-        {path !== '/' && <NavButton to="/" icon={<Play size={18} />}>К парсеру</NavButton>}
+      <div className='header-actions'>
+        {path !== '/scheduler' && <NavButton to='/scheduler' icon={<Clock size={18} />}>Расписание</NavButton>}
+        {path !== '/saved' && <NavButton to='/saved' icon={<Database size={18} />}>Сохранённые результаты</NavButton>}
+        {path !== '/settings' && <NavButton to='/settings' icon={<SettingsIcon size={18} />}>Настройки</NavButton>}
+        {path !== '/' && <NavButton to='/' icon={<Play size={18} />}>К парсеру</NavButton>}
+        {onLogout && <button type='button' className='btn btn-secondary btn-sm' onClick={onLogout}><ShieldCheck size={18} />Выйти</button>}
       </div>
     </header>
   );
@@ -528,7 +540,6 @@ function HomePage({ showToast }) {
 
   return (
     <>
-      <Header />
       <main className="main">
         <section className="section reveal visible search-profiles-section compact-profiles">
           <div className="section-header profiles-header-compact">
@@ -627,7 +638,7 @@ function SavedPage({ showToast }) {
   const profileName = (id) => profiles.find((p) => p.id === id)?.name || `Профиль #${id}`;
   const del = async (id) => { if (!window.confirm('Удалить результат?')) return; try { await api(`/api/saved_results/${id}`, { method: 'DELETE' }); await load(); showToast('Результат удалён'); } catch (err) { showToast(err.message, true); } };
   const open = async (id) => { try { setDetail(await api(`/api/saved_results/${id}`)); } catch (err) { showToast(err.message, true); } };
-  return <><Header title="Сохранённые результаты" subtitle="История парсинга и детали сохранённых запусков" /><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">История запусков</div><button className="btn btn-ghost btn-sm" onClick={load}>Обновить</button></div>{!saved.length && <div className="empty-state"><div className="empty-title">Нет сохранённых результатов</div><div className="empty-text">Запусти парсер с профилем на главной странице, и результат появится здесь.</div></div>}<div className="saved-grid stagger visible">{saved.map((r, i) => <div className="saved-card stagger-item" key={r.id} style={{ animationDelay: `${i * 0.05}s` }} onClick={() => open(r.id)}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>{formatDate(r.run_at)}</span></div><div className="saved-profile"><Badge className="plan">{profileName(r.profile_id)}</Badge></div><div className="saved-price">{priceText(r.cheapest)}</div><div className="saved-summary"><Badge>{r.summary?.total_plus || 0} Plus</Badge><Badge>{r.summary?.classified || 0} LLM</Badge><Badge className="personal">{r.summary?.personal || 0} личных</Badge><Badge className="shared">{r.summary?.shared || 0} общих</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); open(r.id); }}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); del(r.id); }}><Trash2 size={18} /></button></div></div>)}</div></section></main>{detail && <SavedDetail data={detail} onClose={() => setDetail(null)} onDelete={async () => { await del(detail.id); setDetail(null); }} />}</>;
+  return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">История запусков</div><button className="btn btn-ghost btn-sm" onClick={load}>Обновить</button></div>{!saved.length && <div className="empty-state"><div className="empty-title">Нет сохранённых результатов</div><div className="empty-text">Запусти парсер с профилем на главной странице, и результат появится здесь.</div></div>}<div className="saved-grid stagger visible">{saved.map((r, i) => <div className="saved-card stagger-item" key={r.id} style={{ animationDelay: `${i * 0.05}s` }} onClick={() => open(r.id)}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>{formatDate(r.run_at)}</span></div><div className="saved-profile"><Badge className="plan">{profileName(r.profile_id)}</Badge></div><div className="saved-price">{priceText(r.cheapest)}</div><div className="saved-summary"><Badge>{r.summary?.total_plus || 0} Plus</Badge><Badge>{r.summary?.classified || 0} LLM</Badge><Badge className="personal">{r.summary?.personal || 0} личных</Badge><Badge className="shared">{r.summary?.shared || 0} общих</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); open(r.id); }}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); del(r.id); }}><Trash2 size={18} /></button></div></div>)}</div></section></main>{detail && <SavedDetail data={detail} onClose={() => setDetail(null)} onDelete={async () => { await del(detail.id); setDetail(null); }} />}</>;
 }
 
 function SavedDetail({ data, onClose, onDelete }) {
@@ -650,7 +661,7 @@ function SchedulerPage({ showToast }) {
   const toggle = async (id, enabled) => { try { await api(`/api/schedules/${id}`, { method: 'PUT', body: JSON.stringify({ enabled }) }); await load(); showToast(enabled ? 'Расписание активировано' : 'Расписание остановлено'); } catch (err) { showToast(err.message, true); } };
   const runNow = async (id) => { try { await api(`/api/schedules/${id}/run`, { method: 'POST' }); showToast('Запуск по расписанию начат'); } catch (err) { showToast(err.message, true); } };
   const del = async (id) => { if (!window.confirm('Удалить расписание?')) return; try { await api(`/api/schedules/${id}`, { method: 'DELETE' }); await load(); showToast('Расписание удалено'); } catch (err) { showToast(err.message, true); } };
-  return <><Header title="Расписание парсинга" subtitle="Автоматический запуск поиска по расписанию" /><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">Добавить расписание</div></div><div className="card"><div className="form-grid"><Field label="Профиль"><select className="form-input" value={profileID} disabled={!profiles.length} onChange={(e) => setProfileID(e.target.value)}>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Интервал (минут)"><input className="form-input" type="number" value={interval} min="1" onChange={(e) => setIntervalValue(e.target.value)} /></Field></div><div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={!profiles.length} onClick={add}>Добавить расписание</button></div></div></section><section className="section reveal visible"><div className="section-header"><div className="section-label">Активные расписания</div><button className="btn btn-ghost btn-sm" onClick={load}>Обновить</button></div>{!schedules.length && <div className="empty-state"><div className="empty-title">Расписаний пока нет</div><div className="empty-text">Выбери профиль и интервал, чтобы парсер запускался автоматически.</div></div>}<div className="saved-grid stagger visible">{schedules.map((s, i) => <div className="saved-card stagger-item" key={s.id} style={{ animationDelay: `${i * 0.05}s` }}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>Интервал: {s.interval_minutes} мин</span></div><div className="saved-profile"><Badge className="plan">{s.profile_name}</Badge></div><div className="saved-summary"><Badge className={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Активно' : 'Остановлено'}</Badge><Badge>Следующий: {formatDate(s.next_run_at, false)}</Badge><Badge>Последний: {formatDate(s.last_run_at, false)}</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={() => runNow(s.id)}><Play size={18} /></button><button className="btn btn-icon" onClick={() => toggle(s.id, !s.enabled)}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={() => del(s.id)}><Trash2 size={18} /></button></div></div>)}</div></section></main></>;
+  return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">Добавить расписание</div></div><div className="card"><div className="form-grid"><Field label="Профиль"><select className="form-input" value={profileID} disabled={!profiles.length} onChange={(e) => setProfileID(e.target.value)}>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Интервал (минут)"><input className="form-input" type="number" value={interval} min="1" onChange={(e) => setIntervalValue(e.target.value)} /></Field></div><div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={!profiles.length} onClick={add}>Добавить расписание</button></div></div></section><section className="section reveal visible"><div className="section-header"><div className="section-label">Активные расписания</div><button className="btn btn-ghost btn-sm" onClick={load}>Обновить</button></div>{!schedules.length && <div className="empty-state"><div className="empty-title">Расписаний пока нет</div><div className="empty-text">Выбери профиль и интервал, чтобы парсер запускался автоматически.</div></div>}<div className="saved-grid stagger visible">{schedules.map((s, i) => <div className="saved-card stagger-item" key={s.id} style={{ animationDelay: `${i * 0.05}s` }}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>Интервал: {s.interval_minutes} мин</span></div><div className="saved-profile"><Badge className="plan">{s.profile_name}</Badge></div><div className="saved-summary"><Badge className={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Активно' : 'Остановлено'}</Badge><Badge>Следующий: {formatDate(s.next_run_at, false)}</Badge><Badge>Последний: {formatDate(s.last_run_at, false)}</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={() => runNow(s.id)}><Play size={18} /></button><button className="btn btn-icon" onClick={() => toggle(s.id, !s.enabled)}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={() => del(s.id)}><Trash2 size={18} /></button></div></div>)}</div></section></main></>;
 }
 
 function SettingsPage({ showToast }) {
@@ -677,7 +688,6 @@ function SettingsPage({ showToast }) {
   const proxyReady = !!data?.telegram_proxy_active;
   const funpayProxyReady = !!data?.funpay_proxy_active;
   return <>
-    <Header title="Настройки" subtitle="LLM и Telegram" />
     <main className="main settings-page lean-settings">
       <section className="settings-summary-row reveal visible">
         <div className={`settings-pill ${llmReady ? 'ready' : ''}`}><KeyRound size={16} />LLM: {llmReady ? 'готов' : 'нет ключа'}</div>
@@ -753,19 +763,148 @@ function SettingsPage({ showToast }) {
   </>;
 }
 
+function LoginPage({ onLogin, showToast }) {
+  const [isRegister, setIsRegister] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
+
+  useEffect(() => {
+    api('/api/auth/config', { authRedirect: false })
+      .then((d) => setTelegramEnabled(!!d?.telegram_login_enabled))
+      .catch(() => setTelegramEnabled(false));
+  }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+      const data = await api(endpoint, { method: 'POST', body: JSON.stringify({ email, password }), authRedirect: false });
+      setAuthToken(data.access_token);
+      onLogin();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const telegramLogin = async () => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg?.initData) {
+      showToast(telegramEnabled ? 'Откройте приложение через Telegram WebApp' : 'Telegram-вход пока не настроен', true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await api('/api/auth/telegram/login', { method: 'POST', body: JSON.stringify({ init_data: tg.initData }), authRedirect: false });
+      setAuthToken(data.access_token);
+      onLogin();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className='main' style={{ maxWidth: 420, margin: '0 auto', paddingTop: 80 }}>
+      <section className='section reveal visible'>
+        <div className='card' style={{ padding: 32 }}>
+          <div className='brand' style={{ justifyContent: 'center', marginBottom: 24 }}>
+            <div className='brand-icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'><circle cx='12' cy='12' r='5' /><ellipse cx='12' cy='12' rx='9' ry='3' transform='rotate(-35 12 12)' /><circle cx='19' cy='8' r='1.5' fill='currentColor' stroke='none' /></svg></div>
+            <div><h1>Funpay Parser</h1></div>
+          </div>
+          <form onSubmit={submit}>
+            <Field label='Email'><input type='email' value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
+            <Field label='Пароль'><input type='password' value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} /></Field>
+            <button type='submit' className='btn btn-primary btn-lg' disabled={loading} style={{ width: '100%', marginTop: 8 }}>{isRegister ? 'Создать аккаунт' : 'Войти'}</button>
+          </form>
+          <div style={{ textAlign: 'center', marginTop: 16 }}>
+            <button type='button' className='btn btn-ghost btn-sm' onClick={() => setIsRegister((v) => !v)}>{isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Создать'}</button>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 20, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20 }}>
+            <button type='button' className='btn btn-secondary btn-sm' onClick={telegramLogin} disabled={loading || !telegramEnabled}><Bot size={18} />Войти через Telegram</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const [path, setPath] = useState(currentPath());
   const [toast, showToast] = useToast();
+  const [authenticated, setAuthenticated] = useState(!!getAuthToken());
+  const [checking, setChecking] = useState(true);
+
   useEffect(() => {
     const onPop = () => setPath(currentPath());
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    async function init() {
+      try {
+        const cfg = await api('/api/auth/config', { authRedirect: false });
+        if (!cfg?.auth_enabled) {
+          if (mounted) {
+            setAuthenticated(true);
+            setChecking(false);
+          }
+          return;
+        }
+      } catch {
+        // Старые/неполные сборки без auth-config считаем защищёнными, чтобы не открыть API случайно.
+      }
+      if (getAuthToken()) {
+        try { await api('/api/auth/me', { authRedirect: false }); if (mounted) setAuthenticated(true); }
+        catch { clearAuthToken(); if (mounted) setAuthenticated(false); }
+        finally { if (mounted) setChecking(false); }
+        return;
+      }
+      try {
+        const data = await api('/api/auth/refresh', { method: 'POST', authRedirect: false });
+        setAuthToken(data.access_token);
+        if (mounted) setAuthenticated(true);
+      } catch {
+        if (mounted) setAuthenticated(false);
+      } finally {
+        if (mounted) setChecking(false);
+      }
+    }
+    init();
+    return () => { mounted = false; };
+  }, []);
+
+  const logout = async () => {
+    try { await api('/api/auth/logout', { method: 'POST', authRedirect: false }); } catch {}
+    clearAuthToken();
+    window.location.reload();
+  };
+
+  if (checking) {
+    return <><Background /><div className='app'><div className='empty-state' style={{ paddingTop: 120 }}><div className='empty-title'>Загрузка...</div></div></div><Toast toast={toast} /></>;
+  }
+  if (!authenticated) {
+    return <><Background /><div className='app'><LoginPage onLogin={() => setAuthenticated(true)} showToast={showToast} /></div><Toast toast={toast} /></>;
+  }
+  const titles = {
+    '/': ['Funpay Parser', 'мабой'],
+    '/saved': ['Сохранённые результаты', 'История парсинга и детали сохранённых запусков'],
+    '/scheduler': ['Расписание парсинга', 'Автоматический запуск поиска по расписанию'],
+    '/settings': ['Настройки', 'LLM и Telegram'],
+  };
+  const [title, subtitle] = titles[path] || titles['/'];
   let page = <HomePage showToast={showToast} />;
   if (path === '/saved') page = <SavedPage showToast={showToast} />;
   if (path === '/scheduler') page = <SchedulerPage showToast={showToast} />;
   if (path === '/settings') page = <SettingsPage showToast={showToast} />;
-  return <><Background /><div className="app">{page}</div><Toast toast={toast} /></>;
+  return <><Background /><div className='app'><Header onLogout={logout} title={title} subtitle={subtitle} />{page}</div><Toast toast={toast} /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

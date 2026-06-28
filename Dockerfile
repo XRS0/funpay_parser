@@ -25,5 +25,5 @@ ENV DATABASE_PATH=/app/data/parser.db
 ENV PORT=5000
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
-EXPOSE 5000 9090 9091
+EXPOSE 5000 5001 9090 9091
 CMD ["/app/service"]
