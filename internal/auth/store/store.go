@@ -59,7 +59,6 @@ func (s *Store) Init(ctx context.Context) error {
 			created_at TEXT DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_telegram_link_code ON users(telegram_link_code)`,
 	}
 	for _, st := range stmts {
 		if _, err := s.DB.ExecContext(ctx, st); err != nil {
@@ -70,6 +69,7 @@ func (s *Store) Init(ctx context.Context) error {
 		`ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN telegram_link_code TEXT NULL UNIQUE`,
 		`ALTER TABLE users ADD COLUMN telegram_link_expires_at TEXT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_users_telegram_link_code ON users(telegram_link_code)`,
 	}
 	for _, st := range migrations {
 		_, _ = s.DB.ExecContext(ctx, st)
