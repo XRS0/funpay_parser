@@ -39,7 +39,7 @@
                 </div>
                 <div>
                     <h1>Настройки</h1>
-                    <p class="subtitle">Конфигурация API ключей</p>
+                    <p class="subtitle">Конфигурация LLM провайдера</p>
                 </div>
             </div>
             <div class="header-actions">
@@ -53,16 +53,30 @@
         <main class="main">
             <section class="section reveal" style="animation-delay: 0.05s;">
                 <div class="section-header">
-                    <div class="section-label">Fireworks API</div>
+                    <div class="section-label">Настройки LLM</div>
                 </div>
                 <div class="card" style="max-width: 640px;">
                     <div class="field">
-                        <label for="fireworks-key">Fireworks API ключ</label>
-                        <input type="password" id="fireworks-key" class="input" placeholder="Введите Fireworks API ключ">
-                        <div id="key-status" class="hint" style="margin-top: 6px;"></div>
+                        <label for="llm-provider">Провайдер</label>
+                        <select id="llm-provider" class="form-input">
+                            <option value="fireworks">Fireworks</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
                         <div class="hint" style="margin-top: 4px; color: var(--text-3);">
-                            Ключ используется для классификации лотов через LLM.
+                            Выберите провайдера LLM для классификации лотов.
                         </div>
+                    </div>
+                    <div class="field">
+                        <label for="llm-model">Модель</label>
+                        <input type="text" id="llm-model" class="form-input" placeholder="оставь пустым для значения по умолчанию">
+                        <div class="hint" style="margin-top: 4px; color: var(--text-3);">
+                            Модель по умолчанию: <span id="default-model"></span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="llm-api-key">API ключ</label>
+                        <input type="password" id="llm-api-key" class="form-input" placeholder="Введите API ключ">
+                        <div id="key-status" class="hint" style="margin-top: 6px;"></div>
                     </div>
                     <div class="actions" style="margin-top: 16px;">
                         <button id="save-key-btn" class="btn btn-primary">Сохранить</button>
@@ -75,10 +89,18 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        const keyInput = document.getElementById('fireworks-key');
+        const providerSelect = document.getElementById('llm-provider');
+        const modelInput = document.getElementById('llm-model');
+        const keyInput = document.getElementById('llm-api-key');
         const saveKeyBtn = document.getElementById('save-key-btn');
         const keyStatus = document.getElementById('key-status');
+        const defaultModel = document.getElementById('default-model');
         const toast = document.getElementById('toast');
+
+        const defaultModels = {
+            fireworks: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+            openrouter: 'openai/gpt-4o-mini',
+        };
 
         function showToast(message, isError = false) {
             toast.textContent = message;
@@ -87,23 +109,32 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
+        function updateDefaultModelHint() {
+            defaultModel.textContent = defaultModels[providerSelect.value] || '';
+        }
+
         async function loadSettings() {
             try {
                 const resp = await fetch('/api/settings');
                 if (!resp.ok) throw new Error('Failed to load settings');
                 const data = await resp.json();
+                providerSelect.value = data.llm_provider || 'fireworks';
+                modelInput.value = data.llm_model || '';
+                updateDefaultModelHint();
                 if (data.has_key) {
-                    keyStatus.textContent = 'Ключ установлен: ' + data.fireworks_api_key;
+                    keyStatus.textContent = 'Ключ установлен: ' + data.llm_api_key;
                     keyStatus.style.color = 'var(--success)';
                 } else {
                     keyStatus.textContent = 'Ключ не настроен.';
                     keyStatus.style.color = 'var(--error)';
                 }
             } catch (err) {
-                keyStatus.textContent = 'Не удалось загрузить статус ключа.';
+                keyStatus.textContent = 'Не удалось загрузить настройки.';
                 keyStatus.style.color = 'var(--error)';
             }
         }
+
+        providerSelect.addEventListener('change', updateDefaultModelHint);
 
         saveKeyBtn.addEventListener('click', async () => {
             const key = keyInput.value.trim();
@@ -114,11 +145,18 @@
                 const resp = await fetch('/api/settings', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fireworks_api_key: key }),
+                    body: JSON.stringify({
+                        llm_provider: providerSelect.value,
+                        llm_model: modelInput.value.trim(),
+                        llm_api_key: key,
+                    }),
                 });
                 if (!resp.ok) throw new Error('Failed to save settings');
                 const data = await resp.json();
                 keyInput.value = '';
+                modelInput.value = data.llm_model || '';
+                providerSelect.value = data.llm_provider || 'fireworks';
+                updateDefaultModelHint();
                 if (data.has_key) {
                     keyStatus.textContent = 'Ключ сохранён.';
                     keyStatus.style.color = 'var(--success)';

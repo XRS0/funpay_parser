@@ -1,15 +1,12 @@
-"""Classify Funpay listings using the Fireworks chat API."""
+"""Classify Funpay listings using a configurable LLM provider (Fireworks or OpenRouter)."""
 import json
 import time
 from typing import Iterable
 
 import requests
 
-from config import FIREWORKS_MODEL, get_fireworks_api_key
+from config import get_llm_api_key, get_llm_model, get_llm_provider
 from models import Listing
-
-
-FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
 
 
 def _build_prompt(listing: Listing) -> str:
@@ -31,18 +28,38 @@ def _build_prompt(listing: Listing) -> str:
     )
 
 
-def classify_listing(listing: Listing) -> dict:
-    """Classify a single listing using Fireworks."""
-    api_key = get_fireworks_api_key()
+def _provider_config() -> tuple[str, str, str, dict]:
+    """Return (provider, url, model, headers) for the active LLM provider."""
+    provider = get_llm_provider()
+    api_key = get_llm_api_key()
     if not api_key:
-        raise ValueError("Fireworks API key is not configured. Set it in Settings.")
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+        raise ValueError(f"{provider.capitalize()} API key is not configured. Set it in Settings.")
+    model = get_llm_model()
+
+    if provider == "openrouter":
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/XRS0/funpay_parser",
+            "X-Title": "Funpay Parser",
+        }
+    else:
+        url = "https://api.fireworks.ai/inference/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+    return provider, url, model, headers
+
+
+def classify_listing(listing: Listing, stop_event=None) -> dict:
+    """Classify a single listing using the active LLM provider."""
+    provider, url, model, headers = _provider_config()
 
     payload = {
-        "model": FIREWORKS_MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": "You are a helpful classifier that outputs only JSON."},
             {"role": "user", "content": _build_prompt(listing)},
@@ -52,7 +69,7 @@ def classify_listing(listing: Listing) -> dict:
         "response_format": {"type": "json_object"},
     }
 
-    resp = requests.post(FIREWORKS_URL, headers=headers, json=payload, timeout=60)
+    resp = requests.post(url, headers=headers, json=payload, timeout=60)
     resp.raise_for_status()
     data = resp.json()
 

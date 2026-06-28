@@ -28,7 +28,15 @@ from database import (
 )
 from main import ParserCancelled, run_parser
 from scheduler import ParserScheduler
-from config import get_fireworks_api_key, set_fireworks_api_key, RUN_STATE_FILE
+from config import (
+    get_llm_api_key,
+    get_llm_model,
+    get_llm_provider,
+    set_llm_api_key,
+    set_llm_model,
+    set_llm_provider,
+    RUN_STATE_FILE,
+)
 
 app = Flask(__name__)
 _db_path = os.getenv("DATABASE_PATH", "parser.db")
@@ -515,24 +523,44 @@ def api_schedules_run(schedule_id: int):
 
 @app.route("/api/settings", methods=["GET"])
 def api_settings_get():
-    """Return the current persisted settings (key is masked if set)."""
-    key = get_fireworks_api_key() or ""
+    """Return the current LLM provider, model, and masked API key."""
+    provider = get_llm_provider()
+    model = get_llm_model()
+    key = get_llm_api_key() or ""
     masked = ""
     if key:
         masked = key[:4] + "*" * (len(key) - 4) if len(key) > 4 else "*" * len(key)
     return jsonify({
-        "fireworks_api_key": masked,
+        "llm_provider": provider,
+        "llm_model": model,
+        "llm_api_key": masked,
         "has_key": bool(key),
+        "default_models": {
+            "fireworks": "accounts/fireworks/models/llama-v3p1-70b-instruct",
+            "openrouter": "openai/gpt-4o-mini",
+        },
     })
 
 
 @app.route("/api/settings", methods=["PUT"])
 def api_settings_update():
-    """Persist the Fireworks API key from the settings page."""
+    """Persist LLM provider, model, and API key from the settings page."""
     data = request.get_json() or {}
-    key = (data.get("fireworks_api_key") or "").strip()
-    set_fireworks_api_key(key)
-    return jsonify({"success": True, "has_key": bool(get_fireworks_api_key())})
+    provider = data.get("llm_provider")
+    if provider in ("fireworks", "openrouter"):
+        set_llm_provider(provider)
+    model = (data.get("llm_model") or "").strip()
+    if "llm_model" in data:
+        set_llm_model(model)
+    key = (data.get("llm_api_key") or "").strip()
+    if "llm_api_key" in data:
+        set_llm_api_key(key)
+    return jsonify({
+        "success": True,
+        "llm_provider": get_llm_provider(),
+        "llm_model": get_llm_model(),
+        "has_key": bool(get_llm_api_key()),
+    })
 
 
 @app.route("/files/results.json")

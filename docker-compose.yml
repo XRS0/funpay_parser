@@ -9,8 +9,11 @@ services:
       - DATA_DIR=/app/data
       - DATABASE_PATH=/app/data/parser.db
       - DEV_RUNNER=1
+      - LLM_PROVIDER=${LLM_PROVIDER:-fireworks}
       - FIREWORKS_API_KEY=${FIREWORKS_API_KEY:-}
       - FIREWORKS_MODEL=${FIREWORKS_MODEL:-accounts/fireworks/models/llama-v3p1-70b-instruct}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       - FUNPAY_BASE_URL=${FUNPAY_BASE_URL:-https://funpay.com}
       - FUNPAY_LANG=${FUNPAY_LANG:-en}
       - MAX_PAGES=${MAX_PAGES:-3}
