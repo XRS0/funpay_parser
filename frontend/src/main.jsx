@@ -787,6 +787,7 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
   const [linkInfo, setLinkInfo] = useState(null);
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
+  const lastPollError = useRef('');
   const pollTimer = useRef(null);
   const stopPolling = useCallback(() => {
     if (pollTimer.current) window.clearInterval(pollTimer.current);
@@ -799,12 +800,14 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
     if (!code) return false;
     try {
       const user = await api('/api/auth/telegram/confirm-code', { method: 'POST', body: JSON.stringify({ code }), authRedirect: false });
+      lastPollError.current = '';
       stopPolling();
       setLinkInfo(null);
       onLinked?.(user);
       showToast('Telegram привязан');
       return true;
     } catch (err) {
+      lastPollError.current = err.message;
       if (!silent) showToast(err.message, true);
       return false;
     }
@@ -817,9 +820,13 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
     pollTimer.current = window.setInterval(async () => {
       attempts += 1;
       const ok = await confirmCode(code, true);
-      if (ok || attempts >= 45) stopPolling();
+      if (ok) return;
+      if (attempts >= 45) {
+        stopPolling();
+        showToast(lastPollError.current || 'Telegram пока не ответил. Открой Telegram ещё раз и нажми Start.', true);
+      }
     }, 2000);
-  }, [confirmCode, stopPolling]);
+  }, [confirmCode, showToast, stopPolling]);
 
   const openTelegram = (d) => {
     if (d?.deep_link) window.open(d.deep_link, '_blank', 'noopener,noreferrer');
@@ -829,6 +836,7 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
     setBusy(true);
     try {
       const d = await api('/api/auth/telegram/link-code', { method: 'POST', authRedirect: false });
+      lastPollError.current = '';
       setLinkInfo(d);
       openTelegram(d);
       startPolling(d.code);

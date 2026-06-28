@@ -12,3 +12,6 @@ training_data.json
 /frontend/dist/
 
 /funpay-parser-linux-amd64
+
+/funpay-parser-local
+*.pid

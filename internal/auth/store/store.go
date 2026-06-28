@@ -154,8 +154,18 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 
 func (s *Store) LinkTelegram(ctx context.Context, userID int64, telegramUserID int64, chatID int64, username string) (User, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := s.DB.ExecContext(ctx, `UPDATE users SET telegram_user_id=?, telegram_chat_id=?, telegram_username=?, updated_at=? WHERE id=?`, telegramUserID, chatID, username, now, userID)
+	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
+		return User{}, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET telegram_user_id=NULL, telegram_chat_id=NULL, telegram_username=NULL, updated_at=? WHERE telegram_user_id=? AND id<>?`, now, telegramUserID, userID); err != nil {
+		return User{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET telegram_user_id=?, telegram_chat_id=?, telegram_username=?, updated_at=? WHERE id=?`, telegramUserID, chatID, username, now, userID); err != nil {
+		return User{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return User{}, err
 	}
 	return s.GetUserByID(ctx, userID)
@@ -220,7 +230,12 @@ func (s *Store) LinkTelegramByCode(ctx context.Context, code string, telegramUse
 	if code == "" {
 		return User{}, sql.ErrNoRows
 	}
-	row := s.DB.QueryRowContext(ctx, `SELECT id, telegram_link_expires_at FROM users WHERE telegram_link_code=?`, code)
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, err
+	}
+	defer tx.Rollback()
+	row := tx.QueryRowContext(ctx, `SELECT id, telegram_link_expires_at FROM users WHERE telegram_link_code=?`, code)
 	var userID int64
 	var exp string
 	if err := row.Scan(&userID, &exp); err != nil {
@@ -231,8 +246,13 @@ func (s *Store) LinkTelegramByCode(ctx context.Context, code string, telegramUse
 		return User{}, fmt.Errorf("telegram link code expired")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := s.DB.ExecContext(ctx, `UPDATE users SET telegram_user_id=?, telegram_chat_id=?, telegram_username=?, telegram_link_code=NULL, telegram_link_expires_at=NULL, updated_at=? WHERE id=?`, telegramUserID, chatID, username, now, userID)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET telegram_user_id=NULL, telegram_chat_id=NULL, telegram_username=NULL, updated_at=? WHERE telegram_user_id=? AND id<>?`, now, telegramUserID, userID); err != nil {
+		return User{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET telegram_user_id=?, telegram_chat_id=?, telegram_username=?, telegram_link_code=NULL, telegram_link_expires_at=NULL, updated_at=? WHERE id=?`, telegramUserID, chatID, username, now, userID); err != nil {
+		return User{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return User{}, err
 	}
 	return s.GetUserByID(ctx, userID)
