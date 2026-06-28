@@ -1434,16 +1434,17 @@ html {
   padding: 14px 22px;
   border: none;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: var(--danger);
-  color: #fff;
+  background: var(--text);
+  color: var(--surface);
   font-weight: 700;
   font-size: 1rem;
   white-space: nowrap;
+  box-shadow: none;
   transition: background 0.2s ease, transform 0.15s ease;
 }
 
 .stop-btn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.9);
+  background: rgba(255, 255, 255, 0.9);
   transform: translateX(2px);
 }
 
@@ -1459,6 +1460,11 @@ html {
   width: 20px;
   height: 20px;
   margin-right: 8px;
+}
+
+.stop-btn.btn-loading::after {
+  border-color: rgba(0, 0, 0, 0.3);
+  border-top-color: #000;
 }
 
 .query-presets {
