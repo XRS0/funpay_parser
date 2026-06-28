@@ -42,6 +42,7 @@ func (s *Store) Init(ctx context.Context) error {
 	for _, st := range migrations {
 		_, _ = s.DB.ExecContext(ctx, st)
 	}
+	_ = s.PruneAllSaved(ctx, 10)
 	return nil
 }
 
@@ -179,6 +180,24 @@ func (s *Store) PruneSaved(ctx context.Context, userID int64, keep int) error {
 	_, err := s.DB.ExecContext(ctx, `DELETE FROM saved_results WHERE user_id=? AND id NOT IN (SELECT id FROM saved_results WHERE user_id=? ORDER BY run_at DESC, id DESC LIMIT ?)`, userID, userID, keep)
 	return err
 }
+func (s *Store) PruneAllSaved(ctx context.Context, keep int) error {
+	if keep < 1 {
+		keep = 10
+	}
+	rows, err := s.DB.QueryContext(ctx, `SELECT DISTINCT user_id FROM saved_results`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID int64
+		if err := rows.Scan(&userID); err == nil {
+			_ = s.PruneSaved(ctx, userID, keep)
+		}
+	}
+	return nil
+}
+
 func (s *Store) ListSaved(ctx context.Context, userID int64, profileID int) ([]SavedResult, error) {
 	q := `SELECT id,user_id,profile_id,run_at,cheapest_json,summary_json,created_at FROM saved_results WHERE user_id=?`
 	args := []any{userID}
