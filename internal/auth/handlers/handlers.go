@@ -8,18 +8,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"funpay-parser/internal/auth/jwt"
 	authstore "funpay-parser/internal/auth/store"
 	"funpay-parser/internal/auth/telegramverify"
+	"funpay-parser/internal/telegram"
 )
 
 type Handler struct {
 	store      *authstore.Store
 	jwt        *jwt.Manager
 	botToken   string
+	botProxy   string
 	cookieHost string
 }
 
@@ -27,11 +30,12 @@ type Config struct {
 	Store      *authstore.Store
 	JWTManager *jwt.Manager
 	BotToken   string
+	BotProxy   string
 	CookieHost string
 }
 
 func New(cfg Config) *Handler {
-	return &Handler{store: cfg.Store, jwt: cfg.JWTManager, botToken: cfg.BotToken, cookieHost: cfg.CookieHost}
+	return &Handler{store: cfg.Store, jwt: cfg.JWTManager, botToken: cfg.BotToken, botProxy: cfg.BotProxy, cookieHost: cfg.CookieHost}
 }
 
 func jsonOut(w http.ResponseWriter, v any, code int) {
@@ -125,15 +129,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var d struct {
+		Name     string `json:"name"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 	decode(r, &d)
-	if d.Email == "" || d.Password == "" || len(d.Password) < 6 {
-		jsonOut(w, map[string]string{"error": "email and password (min 6 chars) are required"}, 400)
+	if strings.TrimSpace(d.Name) == "" || d.Email == "" || d.Password == "" || len(d.Password) < 6 {
+		jsonOut(w, map[string]string{"error": "name, email and password (min 6 chars) are required"}, 400)
 		return
 	}
-	user, err := h.store.CreateUser(r.Context(), d.Email, d.Password)
+	user, err := h.store.CreateUser(r.Context(), d.Name, d.Email, d.Password)
 	if err != nil {
 		jsonOut(w, map[string]string{"error": "user already exists or registration failed"}, 409)
 		return
@@ -244,6 +249,89 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, map[string]string{"error": "user not found"}, 404)
 		return
 	}
+	jsonOut(w, user, 200)
+}
+
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	claims := r.Context().Value("claims").(*jwt.Claims)
+	var d struct {
+		Name string `json:"name"`
+	}
+	decode(r, &d)
+	if strings.TrimSpace(d.Name) == "" {
+		jsonOut(w, map[string]string{"error": "name is required"}, 400)
+		return
+	}
+	user, err := h.store.UpdateName(r.Context(), claims.UserID, d.Name)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": "failed to update profile"}, 500)
+		return
+	}
+	jsonOut(w, user, 200)
+}
+
+func (h *Handler) TelegramLinkCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	claims := r.Context().Value("claims").(*jwt.Claims)
+	code := strings.ToUpper(generateID()[:10])
+	expiresAt := time.Now().UTC().Add(15 * time.Minute)
+	if err := h.store.SaveTelegramLinkCode(r.Context(), claims.UserID, code, expiresAt); err != nil {
+		jsonOut(w, map[string]string{"error": "failed to create telegram link code"}, 500)
+		return
+	}
+	botUsername := ""
+	if h.botToken != "" {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		if bot, err := telegram.NewWithProxy(h.botToken, h.botProxy).GetMe(ctx); err == nil {
+			botUsername = bot.Username
+		}
+		cancel()
+	}
+	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "start_command": "/start " + code}, 200)
+}
+
+func (h *Handler) TelegramConfirmCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	claims := r.Context().Value("claims").(*jwt.Claims)
+	var d struct {
+		Code string `json:"code"`
+	}
+	decode(r, &d)
+	if h.botToken == "" {
+		jsonOut(w, map[string]string{"error": "telegram bot token is not configured"}, 400)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+	chat, err := telegram.NewWithProxy(h.botToken, h.botProxy).FindStartCode(ctx, d.Code)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": err.Error()}, 400)
+		return
+	}
+	username := chat.Username
+	if username == "" {
+		username = strings.TrimSpace(chat.FirstName + " " + chat.LastName)
+	}
+	user, err := h.store.LinkTelegramByCode(r.Context(), d.Code, chat.ID, chat.ID, username)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": err.Error()}, 400)
+		return
+	}
+	if user.ID != claims.UserID {
+		jsonOut(w, map[string]string{"error": "invalid linked user"}, 403)
+		return
+	}
+	_ = telegram.NewWithProxy(h.botToken, h.botProxy).SendMessage(context.Background(), strconv.FormatInt(chat.ID, 10), "✅ Funpay Parser: Telegram привязан к вашему аккаунту.")
 	jsonOut(w, user, 200)
 }
 
@@ -379,6 +467,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/auth/logout", h.Logout)
 	mux.HandleFunc("/api/auth/telegram/login", h.TelegramLogin)
 	mux.Handle("/api/auth/telegram/link", h.AuthMiddleware(http.HandlerFunc(h.TelegramLink)))
+	mux.Handle("/api/auth/profile", h.AuthMiddleware(http.HandlerFunc(h.UpdateProfile)))
+	mux.Handle("/api/auth/telegram/link-code", h.AuthMiddleware(http.HandlerFunc(h.TelegramLinkCode)))
+	mux.Handle("/api/auth/telegram/confirm-code", h.AuthMiddleware(http.HandlerFunc(h.TelegramConfirmCode)))
 	mux.Handle("/api/auth/password", h.AuthMiddleware(http.HandlerFunc(h.ChangePassword)))
 	mux.Handle("/api/auth/me", h.AuthMiddleware(http.HandlerFunc(h.Me)))
 	return mux

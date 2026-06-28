@@ -36,6 +36,7 @@ type RunState struct {
 	StartedAt  any                 `json:"started_at"`
 	FinishedAt any                 `json:"finished_at"`
 	ProfileID  any                 `json:"profile_id"`
+	UserID     int64               `json:"user_id,omitempty"`
 }
 type parserRunner interface {
 	Run(ctx context.Context, opt runner.Options, progress func(string)) (runner.Result, error)
@@ -53,6 +54,7 @@ type Server struct {
 	jwt           *authjwt.Manager
 	authProxy     *httputil.ReverseProxy
 	authHandler   http.Handler
+	authStore     *authstore.Store
 }
 
 func New(cfg config.Config, st *store.Store) *Server {
@@ -73,10 +75,12 @@ func New(cfg config.Config, st *store.Store) *Server {
 			} else if ast, err := authstore.Open(cfg.AuthDatabasePath); err != nil {
 				log.Println("api: failed to open local auth store:", err)
 			} else {
+				s.authStore = ast
 				s.authHandler = authhandlers.New(authhandlers.Config{
 					Store:      ast,
 					JWTManager: s.jwt,
 					BotToken:   cfg.EffectiveTelegramBotToken(),
+					BotProxy:   cfg.EffectiveTelegramProxyURL(),
 					CookieHost: cfg.AuthCookieHost,
 				}).Routes()
 				log.Println("api: local auth handler configured with", cfg.AuthDatabasePath)
@@ -106,7 +110,7 @@ func (s *Server) schedulerLoop() {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		schedules, err := s.st.ListSchedules(context.Background())
+		schedules, err := s.st.ListAllSchedules(context.Background())
 		if err != nil {
 			continue
 		}
@@ -119,12 +123,12 @@ func (s *Server) schedulerLoop() {
 			if err != nil || next.After(now) {
 				continue
 			}
-			profile, _ := s.st.GetProfile(context.Background(), sc.ProfileID)
+			profile, _ := s.st.GetProfile(context.Background(), sc.UserID, sc.ProfileID)
 			if profile == nil {
 				continue
 			}
-			s.st.TouchScheduleRun(context.Background(), sc.ID, now.Add(time.Duration(sc.IntervalMinutes)*time.Minute))
-			_ = s.startRun(profile.ID, profileOpt(*profile))
+			s.st.TouchScheduleRun(context.Background(), sc.UserID, sc.ID, now.Add(time.Duration(sc.IntervalMinutes)*time.Minute))
+			_ = s.startRun(sc.UserID, profile.ID, profileOpt(*profile))
 		}
 	}
 }
@@ -159,6 +163,46 @@ func (s *Server) protected(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func requestUserID(r *http.Request) int64 {
+	if claims, ok := r.Context().Value("claims").(*authjwt.Claims); ok && claims.UserID > 0 {
+		return claims.UserID
+	}
+	return 1
+}
+
+func (s *Server) telegramChatIDForUser(ctx context.Context, userID int64) string {
+	if s.authStore == nil || userID <= 0 {
+		return ""
+	}
+	user, err := s.authStore.GetUserByID(ctx, userID)
+	if err != nil || user.TelegramChatID == 0 {
+		return ""
+	}
+	return strconv.FormatInt(user.TelegramChatID, 10)
+}
+
+func (s *Server) profileDashboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	userID := requestUserID(r)
+	telegramLinked := false
+	var user any = nil
+	if s.authStore != nil {
+		if u, err := s.authStore.GetUserByID(r.Context(), userID); err == nil {
+			telegramLinked = u.TelegramChatID != 0
+			user = u
+		}
+	}
+	stats, err := s.st.Stats(r.Context(), userID, telegramLinked)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": err.Error()}, 500)
+		return
+	}
+	jsonOut(w, map[string]any{"user": user, "stats": stats})
+}
+
 func (s *Server) routes() {
 	if s.cfg.AuthEnabled {
 		if s.authProxy != nil {
@@ -179,6 +223,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/status", s.protected(s.status))
 	s.mux.HandleFunc("/stop", s.protected(s.stop))
 	s.mux.HandleFunc("/results", s.protected(s.results))
+	s.mux.HandleFunc("/api/profile", s.protected(s.profileDashboard))
 	s.mux.HandleFunc("/api/settings", s.protected(s.settings))
 	s.mux.HandleFunc("/api/telegram/sync", s.protected(s.telegramSync))
 	s.mux.HandleFunc("/api/telegram/test", s.protected(s.telegramTest))
@@ -227,7 +272,7 @@ func (s *Server) progress(msg string) {
 	s.state.Status = msg
 	s.state.Progress = append(s.state.Progress, map[string]string{"time": time.Now().Format("15:04:05"), "message": msg})
 }
-func (s *Server) startRun(profileID any, opt runner.Options) error {
+func (s *Server) startRun(userID int64, profileID any, opt runner.Options) error {
 	s.mu.Lock()
 	if s.state.Running {
 		s.mu.Unlock()
@@ -236,7 +281,7 @@ func (s *Server) startRun(profileID any, opt runner.Options) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	opt.FunpayProxy = s.cfg.EffectiveFunpayProxy()
-	s.state = RunState{Running: true, Status: "Starting parser...", Progress: []map[string]string{}, StartedAt: time.Now().Format("15:04:05"), ProfileID: profileID}
+	s.state = RunState{Running: true, Status: "Starting parser...", Progress: []map[string]string{}, StartedAt: time.Now().Format("15:04:05"), ProfileID: profileID, UserID: userID}
 	s.mu.Unlock()
 	go func() {
 		var res runner.Result
@@ -269,11 +314,11 @@ func (s *Server) startRun(profileID any, opt runner.Options) error {
 
 		if err == nil && res.Success && profileID != nil {
 			if id, ok := profileID.(int); ok && id > 0 {
-				_, _ = s.st.SaveResult(context.Background(), id, res.Cheapest, res.Summary, res.AllResults)
+				_, _ = s.st.SaveResult(context.Background(), userID, id, res.Cheapest, res.Summary, res.AllResults)
 			}
 		}
 		if err == nil && res.Success && res.Cheapest != nil {
-			s.notifyTelegram(res)
+			s.notifyTelegram(userID, res)
 		}
 	}()
 	return nil
@@ -284,12 +329,13 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	userID := requestUserID(r)
 	var d map[string]any
 	decode(r, &d)
 	var opt runner.Options
 	var pid any = nil
 	if v := toInt(d["profile_id"]); v > 0 {
-		p, _ := s.st.GetProfile(r.Context(), v)
+		p, _ := s.st.GetProfile(r.Context(), userID, v)
 		if p == nil {
 			jsonOut(w, map[string]string{"error": "Profile not found"}, 404)
 			return
@@ -299,15 +345,20 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 	} else {
 		opt = runner.Options{CategoryID: orInt(d["category_id"], 1355), Query: orStr(d["query"], "chatgpt plus"), Candidates: orInt(d["candidates"], 40), Pages: toInt(d["pages"]), Deep: toBool(d["deep"]), ScrapeWorkers: orInt(d["scrape_workers"], 4), LLMWorkers: orInt(d["llm_workers"], 8)}
 	}
-	if err := s.startRun(pid, opt); err != nil {
+	if err := s.startRun(userID, pid, opt); err != nil {
 		jsonOut(w, map[string]string{"error": err.Error()}, 409)
 		return
 	}
 	jsonOut(w, map[string]any{"success": true, "status": "started"})
 }
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.state.UserID != 0 && s.state.UserID != userID {
+		jsonOut(w, map[string]any{"running": false, "status": "idle", "progress": []map[string]string{}, "result_summary": nil, "cheapest": nil})
+		return
+	}
 	out := map[string]any{"running": s.state.Running, "status": s.state.Status, "progress": s.state.Progress, "started_at": s.state.StartedAt, "finished_at": s.state.FinishedAt, "error": s.state.Error, "profile_id": s.state.ProfileID}
 	if s.state.Result != nil {
 		out["result_summary"] = s.state.Result.Summary
@@ -319,13 +370,14 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, out)
 }
 func (s *Server) stop(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.state.Running || s.cancel == nil {
+	if !s.state.Running || s.cancel == nil || (s.state.UserID != 0 && s.state.UserID != userID) {
 		jsonOut(w, map[string]string{"error": "No parse task is running."}, 409)
 		return
 	}
@@ -334,8 +386,13 @@ func (s *Server) stop(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, map[string]any{"success": true, "status": "stopping"})
 }
 func (s *Server) results(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.state.UserID != 0 && s.state.UserID != userID {
+		jsonOut(w, map[string]string{"error": "No results yet"}, 404)
+		return
+	}
 	if s.state.Result == nil {
 		jsonOut(w, map[string]string{"error": "No results yet"}, 404)
 		return
@@ -461,7 +518,7 @@ func (s *Server) telegramTest(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, map[string]any{"success": true})
 }
 
-func (s *Server) notifyTelegram(res runner.Result) {
+func (s *Server) notifyTelegram(userID int64, res runner.Result) {
 	if s.dealPublisher != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -473,7 +530,10 @@ func (s *Server) notifyTelegram(res runner.Result) {
 		}
 	}
 	token := s.cfg.EffectiveTelegramBotToken()
-	chatID := s.cfg.EffectiveTelegramChatID()
+	chatID := s.telegramChatIDForUser(context.Background(), userID)
+	if chatID == "" {
+		chatID = s.cfg.EffectiveTelegramChatID()
+	}
 	if token == "" || chatID == "" {
 		log.Println("telegram notification skipped: token or chat id is not configured")
 		return
@@ -492,9 +552,10 @@ func (s *Server) notifyTelegram(res runner.Result) {
 }
 
 func (s *Server) profiles(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	switch r.Method {
 	case http.MethodGet:
-		x, _ := s.st.ListProfiles(r.Context())
+		x, _ := s.st.ListProfiles(r.Context(), userID)
 		jsonOut(w, x)
 	case http.MethodPost:
 		var p store.Profile
@@ -512,7 +573,7 @@ func (s *Server) profiles(w http.ResponseWriter, r *http.Request) {
 		if p.Candidates == 0 {
 			p.Candidates = 40
 		}
-		x, err := s.st.CreateProfile(r.Context(), p)
+		x, err := s.st.CreateProfile(r.Context(), userID, p)
 		if err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 500)
 			return
@@ -523,15 +584,16 @@ func (s *Server) profiles(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (s *Server) profileByID(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	parts := splitPath(r.URL.Path, "/api/profiles/")
 	id := atoi(parts[0])
 	if len(parts) > 1 && parts[1] == "run" && r.Method == http.MethodPost {
-		p, _ := s.st.GetProfile(r.Context(), id)
+		p, _ := s.st.GetProfile(r.Context(), userID, id)
 		if p == nil {
 			jsonOut(w, map[string]string{"error": "Profile not found"}, 404)
 			return
 		}
-		if err := s.startRun(p.ID, profileOpt(*p)); err != nil {
+		if err := s.startRun(userID, p.ID, profileOpt(*p)); err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 409)
 			return
 		}
@@ -540,7 +602,7 @@ func (s *Server) profileByID(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		p, _ := s.st.GetProfile(r.Context(), id)
+		p, _ := s.st.GetProfile(r.Context(), userID, id)
 		if p == nil {
 			jsonOut(w, map[string]string{"error": "Profile not found"}, 404)
 			return
@@ -549,7 +611,7 @@ func (s *Server) profileByID(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		var p store.Profile
 		decode(r, &p)
-		x, err := s.st.UpdateProfile(r.Context(), id, p)
+		x, err := s.st.UpdateProfile(r.Context(), userID, id, p)
 		if err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 500)
 			return
@@ -560,7 +622,7 @@ func (s *Server) profileByID(w http.ResponseWriter, r *http.Request) {
 		}
 		jsonOut(w, x)
 	case http.MethodDelete:
-		ok, _ := s.st.DeleteProfile(r.Context(), id)
+		ok, _ := s.st.DeleteProfile(r.Context(), userID, id)
 		if !ok {
 			jsonOut(w, map[string]string{"error": "Profile not found"}, 404)
 			return
@@ -571,16 +633,17 @@ func (s *Server) profileByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (s *Server) saved(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	switch r.Method {
 	case http.MethodGet:
 		pid, _ := strconv.Atoi(r.URL.Query().Get("profile_id"))
-		x, _ := s.st.ListSaved(r.Context(), pid)
+		x, _ := s.st.ListSaved(r.Context(), userID, pid)
 		jsonOut(w, x)
 	case http.MethodPost:
 		var d map[string]any
 		decode(r, &d)
 		pid := toInt(d["profile_id"])
-		x, err := s.st.SaveResult(r.Context(), pid, d["cheapest"], d["summary"], d["all_results"])
+		x, err := s.st.SaveResult(r.Context(), userID, pid, d["cheapest"], d["summary"], d["all_results"])
 		if err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 500)
 			return
@@ -591,9 +654,10 @@ func (s *Server) saved(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (s *Server) savedByID(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	id := atoi(strings.TrimPrefix(r.URL.Path, "/api/saved_results/"))
 	if r.Method == http.MethodGet {
-		x, _ := s.st.GetSaved(r.Context(), id)
+		x, _ := s.st.GetSaved(r.Context(), userID, id)
 		if x == nil {
 			jsonOut(w, map[string]string{"error": "Saved result not found"}, 404)
 			return
@@ -602,7 +666,7 @@ func (s *Server) savedByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		ok, _ := s.st.DeleteSaved(r.Context(), id)
+		ok, _ := s.st.DeleteSaved(r.Context(), userID, id)
 		if !ok {
 			jsonOut(w, map[string]string{"error": "Saved result not found"}, 404)
 			return
@@ -613,9 +677,10 @@ func (s *Server) savedByID(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 func (s *Server) schedules(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	switch r.Method {
 	case http.MethodGet:
-		x, _ := s.st.ListSchedules(r.Context())
+		x, _ := s.st.ListSchedules(r.Context(), userID)
 		jsonOut(w, x)
 	case http.MethodPost:
 		var sc store.Schedule
@@ -624,7 +689,7 @@ func (s *Server) schedules(w http.ResponseWriter, r *http.Request) {
 			jsonOut(w, map[string]string{"error": "interval_minutes must be a positive integer"}, 400)
 			return
 		}
-		x, err := s.st.CreateSchedule(r.Context(), sc)
+		x, err := s.st.CreateSchedule(r.Context(), userID, sc)
 		if err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 500)
 			return
@@ -635,20 +700,21 @@ func (s *Server) schedules(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (s *Server) scheduleByID(w http.ResponseWriter, r *http.Request) {
+	userID := requestUserID(r)
 	parts := splitPath(r.URL.Path, "/api/schedules/")
 	id := atoi(parts[0])
 	if len(parts) > 1 && parts[1] == "run" && r.Method == http.MethodPost {
-		sc, _ := s.st.GetSchedule(r.Context(), id)
+		sc, _ := s.st.GetSchedule(r.Context(), userID, id)
 		if sc == nil {
 			jsonOut(w, map[string]string{"error": "Schedule not found"}, 404)
 			return
 		}
-		p, _ := s.st.GetProfile(r.Context(), sc.ProfileID)
+		p, _ := s.st.GetProfile(r.Context(), userID, sc.ProfileID)
 		if p == nil {
 			jsonOut(w, map[string]string{"error": "Profile not found"}, 404)
 			return
 		}
-		if err := s.startRun(p.ID, profileOpt(*p)); err != nil {
+		if err := s.startRun(userID, p.ID, profileOpt(*p)); err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 409)
 			return
 		}
@@ -658,7 +724,7 @@ func (s *Server) scheduleByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {
 		var sc store.Schedule
 		decode(r, &sc)
-		x, err := s.st.UpdateSchedule(r.Context(), id, sc)
+		x, err := s.st.UpdateSchedule(r.Context(), userID, id, sc)
 		if err != nil {
 			jsonOut(w, map[string]string{"error": err.Error()}, 500)
 			return
@@ -667,7 +733,7 @@ func (s *Server) scheduleByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		ok, _ := s.st.DeleteSchedule(r.Context(), id)
+		ok, _ := s.st.DeleteSchedule(r.Context(), userID, id)
 		if !ok {
 			jsonOut(w, map[string]string{"error": "Schedule not found"}, 404)
 			return

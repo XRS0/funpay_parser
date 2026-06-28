@@ -16,6 +16,8 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
+  UserCircle,
+  BarChart3,
   Wifi,
   Square,
   Trash2,
@@ -186,7 +188,7 @@ function safeList(value) {
 
 function currentPath() {
   const p = window.location.pathname;
-  return ['/', '/saved', '/scheduler', '/settings'].includes(p) ? p : '/';
+  return ['/', '/saved', '/scheduler', '/settings', '/profile'].includes(p) ? p : '/';
 }
 
 function navigate(path) {
@@ -372,7 +374,7 @@ function NavButton({ to, children, icon, active }) {
   );
 }
 
-function Header({ title = 'Funpay Parser', subtitle = 'мабой' }) {
+function Header({ title = 'Funpay Parser', subtitle = 'мабой', user }) {
   const path = currentPath();
   return (
     <header className='app-header'>
@@ -382,6 +384,7 @@ function Header({ title = 'Funpay Parser', subtitle = 'мабой' }) {
         <NavButton to='/saved' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
         <NavButton to='/scheduler' icon={<Clock size={18} />} active={path === '/scheduler'}>Расписание</NavButton>
         <NavButton to='/settings' icon={<SettingsIcon size={18} />} active={path === '/settings'}>Настройки</NavButton>
+        <button type='button' className={`btn btn-secondary btn-sm nav-btn profile-nav ${path === '/profile' ? 'active' : ''}`} onClick={() => { if (path !== '/profile') navigate('/profile'); }} aria-current={path === '/profile' ? 'page' : undefined}><UserCircle size={18} />{user?.name || user?.email || 'Профиль'}</button>
       </nav>
     </header>
   );
@@ -776,6 +779,98 @@ function SchedulerPage({ showToast }) {
   return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">Добавить расписание</div></div><div className="card"><div className="form-grid"><Field label="Профиль"><select className="form-input" value={profileID} disabled={!loaded || !profiles.length} onChange={(e) => setProfileID(e.target.value)}>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Интервал (минут)"><input className="form-input" type="number" value={interval} min="1" onChange={(e) => setIntervalValue(e.target.value)} /></Field></div><div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={!loaded || !profiles.length} onClick={add}>Добавить расписание</button></div></div></section><section className="section reveal visible"><div className="section-header"><div className="section-label">Активные расписания</div><button className="btn btn-ghost btn-sm" disabled={!loaded} onClick={() => load().catch((err) => showToast(err.message, true))}>Обновить</button></div>{!loaded ? <SavedGridSkeleton count={3} /> : !schedules.length ? <div className="empty-state"><div className="empty-title">Расписаний пока нет</div><div className="empty-text">Выбери профиль и интервал, чтобы парсер запускался автоматически.</div></div> : <div className="saved-grid stagger visible">{schedules.map((s, i) => <div className="saved-card stagger-item" key={s.id} style={{ animationDelay: `${i * 0.05}s` }}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>Интервал: {s.interval_minutes} мин</span></div><div className="saved-profile"><Badge className="plan">{s.profile_name}</Badge></div><div className="saved-summary"><Badge className={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Активно' : 'Остановлено'}</Badge><Badge>Следующий: {formatDate(s.next_run_at, false)}</Badge><Badge>Последний: {formatDate(s.last_run_at, false)}</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={() => runNow(s.id)}><Play size={18} /></button><button className="btn btn-icon" onClick={() => toggle(s.id, !s.enabled)}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={() => del(s.id)}><Trash2 size={18} /></button></div></div>)}</div>}</section></main></>;
 }
 
+
+function TelegramLinkPanel({ account, showToast, onLinked }) {
+  const [linkInfo, setLinkInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const createCode = async () => {
+    setBusy(true);
+    try {
+      const d = await api('/api/auth/telegram/link-code', { method: 'POST', authRedirect: false });
+      setLinkInfo(d);
+      showToast('Код Telegram создан');
+    } catch (err) { showToast(err.message, true); }
+    finally { setBusy(false); }
+  };
+  const confirm = async () => {
+    if (!linkInfo?.code) return;
+    setBusy(true);
+    try {
+      const user = await api('/api/auth/telegram/confirm-code', { method: 'POST', body: JSON.stringify({ code: linkInfo.code }), authRedirect: false });
+      setLinkInfo(null);
+      onLinked?.(user);
+      showToast('Telegram привязан');
+    } catch (err) { showToast(err.message, true); }
+    finally { setBusy(false); }
+  };
+  return <div className='telegram-link-box'>
+    <div>
+      <div className='telegram-link-title'>{account?.telegram_chat_id ? 'Telegram привязан' : 'Привязка Telegram'}</div>
+      <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : account?.telegram_chat_id ? `Chat ID ${account.telegram_chat_id}` : 'Создай код, отправь его боту через /start и подтверди здесь.'}</div>
+    </div>
+    {linkInfo ? <div className='telegram-code-panel'>
+      <code>{linkInfo.start_command}</code>
+      <span>{linkInfo.bot_username ? `Бот: @${linkInfo.bot_username}` : 'Открой бота и отправь команду'}</span>
+      <button className='btn btn-primary btn-sm' disabled={busy} onClick={confirm}>Я отправил /start</button>
+    </div> : <button className='btn btn-secondary btn-sm' disabled={busy} onClick={createCode}>{account?.telegram_chat_id ? 'Перепривязать' : 'Получить код'}</button>}
+  </div>;
+}
+
+function ProfilePage({ showToast, user, onUserUpdate }) {
+  const [data, setData] = useState(null);
+  const [name, setName] = useState(user?.name || '');
+  const [editing, setEditing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const d = await api('/api/profile');
+      setData(d);
+      if (d?.user) {
+        onUserUpdate?.(d.user);
+        setName(d.user.name || '');
+      }
+    } finally { setLoaded(true); }
+  }, [onUserUpdate]);
+  useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
+  const saveName = async () => {
+    try {
+      const u = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify({ name }), authRedirect: false });
+      onUserUpdate?.(u);
+      setEditing(false);
+      await load();
+      showToast('Профиль обновлён');
+    } catch (err) { showToast(err.message, true); }
+  };
+  if (!loaded) return <main className='main profile-page'><SettingsSkeleton /></main>;
+  const u = data?.user || user || {};
+  const st = data?.stats || {};
+  return <main className='main profile-page'>
+    <section className='profile-hero-card reveal visible'>
+      <div className='profile-avatar'>{(u.name || u.email || 'U').slice(0, 1).toUpperCase()}</div>
+      <div className='profile-hero-main'>
+        <div className='section-label'>Профиль</div>
+        {editing ? <div className='profile-name-edit'><input className='form-input clean-input' value={name} onChange={(e) => setName(e.target.value)} /><button className='btn btn-primary btn-sm' onClick={saveName}>Сохранить</button><button className='btn btn-ghost btn-sm' onClick={() => { setEditing(false); setName(u.name || ''); }}>Отмена</button></div> : <><h2>{u.name || 'Пользователь'}</h2><p>{u.email}</p></>}
+      </div>
+      {!editing && <button className='btn btn-secondary btn-sm' onClick={() => setEditing(true)}>Изменить имя</button>}
+    </section>
+    <section className='usage-grid reveal visible'>
+      <div className='usage-card'><span>Профили</span><strong>{st.profiles || 0}</strong></div>
+      <div className='usage-card'><span>Сохранёнки</span><strong>{st.saved_results || 0}/10</strong></div>
+      <div className='usage-card'><span>Расписания</span><strong>{st.schedules || 0}</strong></div>
+      <div className='usage-card'><span>Проверено LLM</span><strong>{st.total_llm || 0}</strong></div>
+      <div className='usage-card'><span>Plus найдено</span><strong>{st.total_plus || 0}</strong></div>
+      <div className='usage-card'><span>Лучшая цена</span><strong>{st.best_price ? `${st.best_price} ${st.best_currency || ''}` : '—'}</strong></div>
+    </section>
+    <section className='settings-edit-card reveal visible'>
+      <div className='settings-edit-head'><div><h2>Telegram</h2><p className='muted-copy'>Уведомления отправляются только в Telegram, привязанный к твоему аккаунту.</p></div><Badge className={st.telegram_linked ? 'success' : 'neutral'}>{st.telegram_linked ? 'привязан' : 'не привязан'}</Badge></div>
+      <TelegramLinkPanel account={u} showToast={showToast} onLinked={(next) => { onUserUpdate?.(next); load(); }} />
+    </section>
+    <section className='settings-edit-card reveal visible'>
+      <div className='settings-edit-head'><div><h2>Использование</h2><div className='settings-readonly-grid'><div><span>Последний запуск</span><strong>{st.last_run_at ? formatDate(st.last_run_at) : '—'}</strong></div><div><span>Хранение</span><strong>только последние 10 запусков</strong></div><div><span>Изоляция</span><strong>данные видит только владелец</strong></div></div></div><BarChart3 size={28} /></div>
+    </section>
+  </main>;
+}
+
 function SettingsPage({ showToast, onLogout }) {
   const [data, setData] = useState(null);
   const [account, setAccount] = useState(null);
@@ -854,6 +949,7 @@ function SettingsPage({ showToast, onLogout }) {
           <div>
             <h2>Аккаунт</h2>
             <div className="settings-readonly-grid">
+              <div><span>Имя</span><strong>{account?.name || '—'}</strong></div>
               <div><span>Email</span><strong>{account?.email || 'текущий пользователь'}</strong></div>
               <div><span>Роль</span><strong>{account?.role || 'user'}</strong></div>
               <div><span>Вход</span><strong>{account?.telegram_username ? `Telegram @${account.telegram_username}` : 'email / password'}</strong></div>
@@ -864,6 +960,7 @@ function SettingsPage({ showToast, onLogout }) {
             <button className="btn btn-danger btn-sm" onClick={onLogout}><ShieldCheck size={18} />Выйти</button>
           </div>
         </div>
+        <TelegramLinkPanel account={account} showToast={showToast} onLinked={(u) => { setAccount(u); load(); }} />
         {editAccount && <div className="settings-edit-body">
           <div className="settings-form-grid two">
             <Field label="Текущий пароль"><input className="form-input clean-input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Текущий пароль" /></Field>
@@ -943,6 +1040,7 @@ function SettingsPage({ showToast, onLogout }) {
 
 function LoginPage({ onLogin, showToast }) {
   const [isRegister, setIsRegister] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -959,7 +1057,7 @@ function LoginPage({ onLogin, showToast }) {
     setLoading(true);
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
-      const data = await api(endpoint, { method: 'POST', body: JSON.stringify({ email, password }), authRedirect: false });
+      const data = await api(endpoint, { method: 'POST', body: JSON.stringify(isRegister ? { name, email, password } : { email, password }), authRedirect: false });
       setAuthToken(data.access_token);
       onLogin();
     } catch (err) {
@@ -996,6 +1094,7 @@ function LoginPage({ onLogin, showToast }) {
             <div><h1>Funpay Parser</h1></div>
           </div>
           <form onSubmit={submit}>
+            {isRegister && <Field label='Имя'><input type='text' value={name} onChange={(e) => setName(e.target.value)} required placeholder='Как тебя показывать в профиле' /></Field>}
             <Field label='Email'><input type='email' value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
             <Field label='Пароль'><input type='password' value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} /></Field>
             <button type='submit' className='btn btn-primary btn-lg' disabled={loading} style={{ width: '100%', marginTop: 8 }}>{isRegister ? 'Создать аккаунт' : 'Войти'}</button>
@@ -1016,6 +1115,7 @@ function App() {
   const [path, setPath] = useState(currentPath());
   const [toast, showToast] = useToast();
   const [authenticated, setAuthenticated] = useState(!!getAuthToken());
+  const [currentUser, setCurrentUser] = useState(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -1040,7 +1140,7 @@ function App() {
         // Старые/неполные сборки без auth-config считаем защищёнными, чтобы не открыть API случайно.
       }
       if (getAuthToken()) {
-        try { await api('/api/auth/me', { authRedirect: false }); if (mounted) setAuthenticated(true); }
+        try { const me = await api('/api/auth/me', { authRedirect: false }); if (mounted) { setCurrentUser(me); setAuthenticated(true); } }
         catch { clearAuthToken(); if (mounted) setAuthenticated(false); }
         finally { if (mounted) setChecking(false); }
         return;
@@ -1048,7 +1148,7 @@ function App() {
       try {
         const data = await api('/api/auth/refresh', { method: 'POST', authRedirect: false });
         setAuthToken(data.access_token);
-        if (mounted) setAuthenticated(true);
+        if (mounted) { setCurrentUser(data.user || null); setAuthenticated(true); }
       } catch {
         if (mounted) setAuthenticated(false);
       } finally {
@@ -1069,20 +1169,22 @@ function App() {
     return <><Background /><div className='app'><AppLoadingScreen /></div><Toast toast={toast} /></>;
   }
   if (!authenticated) {
-    return <><Background /><div className='app'><LoginPage onLogin={() => setAuthenticated(true)} showToast={showToast} /></div><Toast toast={toast} /></>;
+    return <><Background /><div className='app'><LoginPage onLogin={async () => { const me = await api('/api/auth/me', { authRedirect: false }).catch(() => null); setCurrentUser(me); setAuthenticated(true); }} showToast={showToast} /></div><Toast toast={toast} /></>;
   }
   const titles = {
     '/': ['Funpay Parser', 'мабой'],
     '/saved': ['Сохранённые результаты', 'История парсинга и детали сохранённых запусков'],
     '/scheduler': ['Расписание парсинга', 'Автоматический запуск поиска по расписанию'],
     '/settings': ['Настройки', 'LLM и Telegram'],
+    '/profile': ['Профиль', 'Статистика и аккаунт'],
   };
   const [title, subtitle] = titles[path] || titles['/'];
   let page = <HomePage showToast={showToast} />;
   if (path === '/saved') page = <SavedPage showToast={showToast} />;
   if (path === '/scheduler') page = <SchedulerPage showToast={showToast} />;
   if (path === '/settings') page = <SettingsPage showToast={showToast} onLogout={logout} />;
-  return <><Background /><div className='app'><Header title={title} subtitle={subtitle} />{page}</div><Toast toast={toast} /></>;
+  if (path === '/profile') page = <ProfilePage showToast={showToast} user={currentUser} onUserUpdate={setCurrentUser} />;
+  return <><Background /><div className='app'><Header title={title} subtitle={subtitle} user={currentUser} />{page}</div><Toast toast={toast} /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

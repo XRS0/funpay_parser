@@ -158,6 +158,54 @@ func (c *Client) LatestChat(ctx context.Context) (Chat, error) {
 	return Chat{}, fmt.Errorf("no Telegram chats found yet; open the bot and send /start, then try again")
 }
 
+func (c *Client) FindStartCode(ctx context.Context, code string) (Chat, error) {
+	if !c.enabled() {
+		return Chat{}, fmt.Errorf("telegram bot token is empty")
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return Chat{}, fmt.Errorf("telegram link code is empty")
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.apiURL("getUpdates?limit=100&timeout=0"), nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return Chat{}, c.safeErr(err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		OK     bool `json:"ok"`
+		Result []struct {
+			Message *struct {
+				Chat Chat   `json:"chat"`
+				Text string `json:"text"`
+			} `json:"message"`
+		} `json:"result"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return Chat{}, err
+	}
+	if !out.OK {
+		if out.Description == "" {
+			out.Description = fmt.Sprintf("telegram getUpdates failed with http %d", resp.StatusCode)
+		}
+		return Chat{}, fmt.Errorf("%s", out.Description)
+	}
+	wantedA := "/start " + code
+	wantedB := "/start_" + code
+	for i := len(out.Result) - 1; i >= 0; i-- {
+		msg := out.Result[i].Message
+		if msg == nil || msg.Chat.ID == 0 {
+			continue
+		}
+		text := strings.TrimSpace(msg.Text)
+		if text == wantedA || text == wantedB || text == code {
+			return msg.Chat, nil
+		}
+	}
+	return Chat{}, fmt.Errorf("open the bot and send /start %s, then press confirm", code)
+}
+
 func (c *Client) SendMessage(ctx context.Context, chatID string, text string) error {
 	if !c.enabled() {
 		return fmt.Errorf("telegram bot token is empty")
@@ -267,7 +315,8 @@ func DealCaption(res runner.Result) string {
 		reason = "подтверждён как личный аккаунт"
 	}
 	return fmt.Sprintf(
-		"🌌 <b>Funpay Parser — отчёт готов</b>\n\n"+
+		"🌌 <b>Funpay Parser — персональный отчёт готов</b>\n"+
+			"Данные отправлены только в Telegram, привязанный к аккаунту.\n\n"+
 			"🏆 <b>%s</b>\n"+
 			"💰 <b>%.2f %s</b> · 👤 %s · 🎯 %s\n\n"+
 			"📊 Лотов: <b>%d</b> · LLM: <b>%d</b> · Личных: <b>%d</b> · Общих: <b>%d</b>\n"+
@@ -306,7 +355,8 @@ func DealMessage(res runner.Result) string {
 		reason = "LLM подтвердил, что это похоже на личный аккаунт."
 	}
 	return fmt.Sprintf(
-		"🌌 <b>Funpay Parser — отчёт готов</b>\n\n"+
+		"🌌 <b>Funpay Parser — персональный отчёт готов</b>\n"+
+			"Данные отправлены только в Telegram, привязанный к аккаунту.\n\n"+
 			"🏆 <b>Самый дешёвый личный аккаунт</b>\n"+
 			"<b>%s</b>\n\n"+
 			"💰 <b>Цена:</b> %.2f %s\n"+
