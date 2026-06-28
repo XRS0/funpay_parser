@@ -312,7 +312,7 @@ func (h *Handler) TelegramLoginCode(w http.ResponseWriter, r *http.Request) {
 		botUsername = bot.Username
 	}
 	cancel()
-	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "start_command": "/start", "deep_link": telegramDeepLink(botUsername, code)}, 200)
+	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "deep_link": telegramDeepLink(botUsername, code)}, 200)
 }
 
 func (h *Handler) TelegramConfirmLoginCode(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +373,7 @@ func (h *Handler) TelegramLinkCode(w http.ResponseWriter, r *http.Request) {
 		}
 		cancel()
 	}
-	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "start_command": "/start", "deep_link": telegramDeepLink(botUsername, code)}, 200)
+	jsonOut(w, map[string]any{"code": code, "expires_at": expiresAt.Format(time.RFC3339), "bot_username": botUsername, "deep_link": telegramDeepLink(botUsername, code)}, 200)
 }
 
 func (h *Handler) TelegramConfirmCode(w http.ResponseWriter, r *http.Request) {
