@@ -363,27 +363,26 @@ function Brand({ title, subtitle }) {
   );
 }
 
-function NavButton({ to, children, icon }) {
+function NavButton({ to, children, icon, active }) {
   return (
-    <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate(to)}>
+    <button type="button" className={`btn btn-secondary btn-sm nav-btn ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => { if (!active) navigate(to); }}>
       {icon}
       {children}
     </button>
   );
 }
 
-function Header({ title = 'Funpay Parser', subtitle = 'мабой', onLogout }) {
+function Header({ title = 'Funpay Parser', subtitle = 'мабой' }) {
   const path = currentPath();
   return (
     <header className='app-header'>
       <Brand title={title} subtitle={subtitle} />
-      <div className='header-actions'>
-        {path !== '/scheduler' && <NavButton to='/scheduler' icon={<Clock size={18} />}>Расписание</NavButton>}
-        {path !== '/saved' && <NavButton to='/saved' icon={<Database size={18} />}>Сохранённые результаты</NavButton>}
-        {path !== '/settings' && <NavButton to='/settings' icon={<SettingsIcon size={18} />}>Настройки</NavButton>}
-        {path !== '/' && <NavButton to='/' icon={<Play size={18} />}>К парсеру</NavButton>}
-        {onLogout && <button type='button' className='btn btn-secondary btn-sm' onClick={onLogout}><ShieldCheck size={18} />Выйти</button>}
-      </div>
+      <nav className='header-actions' aria-label='Основная навигация'>
+        <NavButton to='/' icon={<Play size={18} />} active={path === '/'}>Парсер</NavButton>
+        <NavButton to='/saved' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
+        <NavButton to='/scheduler' icon={<Clock size={18} />} active={path === '/scheduler'}>Расписание</NavButton>
+        <NavButton to='/settings' icon={<SettingsIcon size={18} />} active={path === '/settings'}>Настройки</NavButton>
+      </nav>
     </header>
   );
 }
@@ -774,8 +773,9 @@ function SchedulerPage({ showToast }) {
   return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">Добавить расписание</div></div><div className="card"><div className="form-grid"><Field label="Профиль"><select className="form-input" value={profileID} disabled={!loaded || !profiles.length} onChange={(e) => setProfileID(e.target.value)}>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Интервал (минут)"><input className="form-input" type="number" value={interval} min="1" onChange={(e) => setIntervalValue(e.target.value)} /></Field></div><div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={!loaded || !profiles.length} onClick={add}>Добавить расписание</button></div></div></section><section className="section reveal visible"><div className="section-header"><div className="section-label">Активные расписания</div><button className="btn btn-ghost btn-sm" disabled={!loaded} onClick={() => load().catch((err) => showToast(err.message, true))}>Обновить</button></div>{!loaded ? <SavedGridSkeleton count={3} /> : !schedules.length ? <div className="empty-state"><div className="empty-title">Расписаний пока нет</div><div className="empty-text">Выбери профиль и интервал, чтобы парсер запускался автоматически.</div></div> : <div className="saved-grid stagger visible">{schedules.map((s, i) => <div className="saved-card stagger-item" key={s.id} style={{ animationDelay: `${i * 0.05}s` }}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>Интервал: {s.interval_minutes} мин</span></div><div className="saved-profile"><Badge className="plan">{s.profile_name}</Badge></div><div className="saved-summary"><Badge className={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Активно' : 'Остановлено'}</Badge><Badge>Следующий: {formatDate(s.next_run_at, false)}</Badge><Badge>Последний: {formatDate(s.last_run_at, false)}</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={() => runNow(s.id)}><Play size={18} /></button><button className="btn btn-icon" onClick={() => toggle(s.id, !s.enabled)}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={() => del(s.id)}><Trash2 size={18} /></button></div></div>)}</div>}</section></main></>;
 }
 
-function SettingsPage({ showToast }) {
+function SettingsPage({ showToast, onLogout }) {
   const [data, setData] = useState(null);
+  const [account, setAccount] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [provider, setProvider] = useState('fireworks');
   const [model, setModel] = useState('');
@@ -787,10 +787,19 @@ function SettingsPage({ showToast }) {
   const [editLLM, setEditLLM] = useState(false);
   const [editTelegram, setEditTelegram] = useState(false);
   const [editFunpay, setEditFunpay] = useState(false);
+  const [editAccount, setEditAccount] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [accountBusy, setAccountBusy] = useState(false);
   const load = useCallback(async () => {
     try {
-      const d = await api('/api/settings');
+      const [d, me] = await Promise.all([
+        api('/api/settings'),
+        api('/api/auth/me', { authRedirect: false }).catch(() => null),
+      ]);
       setData(d);
+      setAccount(me);
       setProvider(d.llm_provider || 'fireworks');
       setModel(d.llm_model || '');
       setTgChat(d.telegram_chat_id || '');
@@ -806,6 +815,21 @@ function SettingsPage({ showToast }) {
   const saveFunpay = async () => { try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ funpay_proxy: funpayProxy.trim() }) }); setEditFunpay(false); await load(); showToast('Funpay proxy сохранён'); } catch (err) { showToast(err.message, true); } };
   const syncTelegram = async () => { try { const d = await api('/api/telegram/sync', { method: 'POST' }); setTgChat(d.chat_id || ''); await load(); showToast('Чат найден'); } catch (err) { showToast(err.message, true); } };
   const testTelegram = async () => { try { await api('/api/telegram/test', { method: 'POST' }); showToast('Тест отправлен'); } catch (err) { showToast(err.message, true); } };
+  const savePassword = async () => {
+    if (newPassword.length < 6) { showToast('Новый пароль должен быть минимум 6 символов', true); return; }
+    if (newPassword !== confirmPassword) { showToast('Пароли не совпадают', true); return; }
+    setAccountBusy(true);
+    try {
+      await api('/api/auth/password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }), authRedirect: false });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setEditAccount(false);
+      showToast('Пароль изменён, войдите заново');
+      window.setTimeout(onLogout, 650);
+    } catch (err) { showToast(err.message, true); }
+    finally { setAccountBusy(false); }
+  };
   if (!loaded) {
     return <main className="main settings-page lean-settings"><SettingsSkeleton /></main>;
   }
@@ -820,6 +844,31 @@ function SettingsPage({ showToast }) {
         <div className={`settings-pill ${telegramReady ? 'ready' : ''}`}><Bot size={16} />Telegram: {telegramReady ? 'включён' : 'выключен'}</div>
         <div className={`settings-pill ${funpayProxyReady ? 'ready' : ''}`}><Route size={16} />Funpay proxy: {funpayProxyReady ? 'активен' : 'нет'}</div>
         <div className={`settings-pill ${proxyReady ? 'ready' : ''}`}><Wifi size={16} />Telegram proxy: {proxyReady ? 'активен' : 'нет'}</div>
+      </section>
+
+      <section className="settings-edit-card reveal visible account-settings-card">
+        <div className="settings-edit-head">
+          <div>
+            <h2>Аккаунт</h2>
+            <div className="settings-readonly-grid">
+              <div><span>Email</span><strong>{account?.email || 'текущий пользователь'}</strong></div>
+              <div><span>Роль</span><strong>{account?.role || 'user'}</strong></div>
+              <div><span>Вход</span><strong>{account?.telegram_username ? `Telegram @${account.telegram_username}` : 'email / password'}</strong></div>
+            </div>
+          </div>
+          <div className="settings-actions account-actions">
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditAccount((v) => !v)}>{editAccount ? 'Закрыть' : 'Поменять пароль'}</button>
+            <button className="btn btn-danger btn-sm" onClick={onLogout}><ShieldCheck size={18} />Выйти</button>
+          </div>
+        </div>
+        {editAccount && <div className="settings-edit-body">
+          <div className="settings-form-grid two">
+            <Field label="Текущий пароль"><input className="form-input clean-input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Текущий пароль" /></Field>
+            <Field label="Новый пароль"><input className="form-input clean-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Минимум 6 символов" /></Field>
+          </div>
+          <Field label="Повтор нового пароля"><input className="form-input clean-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Повтори новый пароль" /></Field>
+          <div className="settings-actions"><button className={`btn btn-primary ${accountBusy ? 'btn-loading' : ''}`} disabled={accountBusy} onClick={savePassword}>Сменить пароль</button><button className="btn btn-ghost" onClick={() => { setEditAccount(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}>Отмена</button></div>
+        </div>}
       </section>
 
       <section className="settings-edit-card reveal visible">
@@ -1029,8 +1078,8 @@ function App() {
   let page = <HomePage showToast={showToast} />;
   if (path === '/saved') page = <SavedPage showToast={showToast} />;
   if (path === '/scheduler') page = <SchedulerPage showToast={showToast} />;
-  if (path === '/settings') page = <SettingsPage showToast={showToast} />;
-  return <><Background /><div className='app'><Header onLogout={logout} title={title} subtitle={subtitle} />{page}</div><Toast toast={toast} /></>;
+  if (path === '/settings') page = <SettingsPage showToast={showToast} onLogout={logout} />;
+  return <><Background /><div className='app'><Header title={title} subtitle={subtitle} />{page}</div><Toast toast={toast} /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

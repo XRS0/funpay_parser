@@ -179,6 +179,16 @@ func (s *Store) RevokeAllUserRefreshTokens(ctx context.Context, userID int64) er
 	return err
 }
 
+func (s *Store) UpdatePassword(ctx context.Context, userID int64, password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err = s.DB.ExecContext(ctx, `UPDATE users SET password_hash=?, updated_at=? WHERE id=?`, string(hash), now, userID)
+	return err
+}
+
 func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }

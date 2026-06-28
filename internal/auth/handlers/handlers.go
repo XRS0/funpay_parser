@@ -247,6 +247,43 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, user, 200)
 }
 
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	claims := r.Context().Value("claims").(*jwt.Claims)
+	var d struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	decode(r, &d)
+	if len(d.NewPassword) < 6 {
+		jsonOut(w, map[string]string{"error": "new password must be at least 6 chars"}, 400)
+		return
+	}
+	user, hash, err := h.store.GetUserByEmail(r.Context(), claims.Email)
+	if err != nil {
+		jsonOut(w, map[string]string{"error": "user not found"}, 404)
+		return
+	}
+	if user.ID != claims.UserID {
+		jsonOut(w, map[string]string{"error": "invalid user"}, 403)
+		return
+	}
+	if hash != "" && !authstore.CheckPassword(hash, d.CurrentPassword) {
+		jsonOut(w, map[string]string{"error": "current password is invalid"}, 401)
+		return
+	}
+	if err := h.store.UpdatePassword(r.Context(), claims.UserID, d.NewPassword); err != nil {
+		jsonOut(w, map[string]string{"error": "failed to update password"}, 500)
+		return
+	}
+	_ = h.store.RevokeAllUserRefreshTokens(r.Context(), claims.UserID)
+	clearRefreshCookie(w, h.cookieHost)
+	jsonOut(w, map[string]bool{"success": true}, 200)
+}
+
 func (h *Handler) TelegramLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
@@ -342,6 +379,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/auth/logout", h.Logout)
 	mux.HandleFunc("/api/auth/telegram/login", h.TelegramLogin)
 	mux.Handle("/api/auth/telegram/link", h.AuthMiddleware(http.HandlerFunc(h.TelegramLink)))
+	mux.Handle("/api/auth/password", h.AuthMiddleware(http.HandlerFunc(h.ChangePassword)))
 	mux.Handle("/api/auth/me", h.AuthMiddleware(http.HandlerFunc(h.Me)))
 	return mux
 }
