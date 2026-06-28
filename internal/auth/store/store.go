@@ -67,7 +67,7 @@ func (s *Store) Init(ctx context.Context) error {
 	}
 	migrations := []string{
 		`ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN telegram_link_code TEXT NULL UNIQUE`,
+		`ALTER TABLE users ADD COLUMN telegram_link_code TEXT NULL`,
 		`ALTER TABLE users ADD COLUMN telegram_link_expires_at TEXT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_users_telegram_link_code ON users(telegram_link_code)`,
 	}
