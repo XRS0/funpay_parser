@@ -2406,3 +2406,63 @@ html {
     padding: 10px 62px 10px 12px;
   }
 }
+
+/* Profile cards corrected size and selection cleanup */
+.profile-inline-selected,
+.profile-active-dot { display: none !important; }
+.compact-list {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.compact-profile-card {
+  min-height: 96px;
+  padding: 16px 78px 16px 18px;
+  border-radius: 18px;
+  gap: 11px;
+  align-content: center;
+}
+.profile-main-line {
+  gap: 14px;
+}
+.profile-main-line .profile-name {
+  max-width: 34%;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+.profile-main-line .profile-query {
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+.profile-meta-row.compact {
+  gap: 7px;
+  font-size: 0.78rem;
+}
+.profile-meta-row.compact span {
+  padding: 5px 8px;
+}
+.compact-actions {
+  right: 16px;
+  gap: 8px;
+}
+.compact-actions .profile-action-link {
+  width: 30px;
+  height: 30px;
+}
+.compact-actions .profile-action-link svg {
+  width: 15px;
+  height: 15px;
+}
+.modal-content.modal-wide {
+  max-width: min(1180px, 94vw);
+  width: min(1180px, 94vw);
+}
+.modal-wide .table-wrap {
+  max-height: 58vh;
+}
+@media (max-width: 860px) {
+  .compact-profile-card {
+    min-height: 104px;
+    padding: 15px 68px 15px 16px;
+  }
+  .profile-main-line .profile-name { max-width: 100%; }
+}

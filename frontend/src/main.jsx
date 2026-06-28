@@ -445,6 +445,10 @@ function HomePage({ showToast }) {
   }, [loadProfiles, pollStatus, showToast]);
 
   const applyProfile = (p) => {
+    if (selectedProfile?.id === p.id) {
+      setSelectedProfile(null);
+      return;
+    }
     setSelectedProfile(p);
     setQuery(p.query || 'chatgpt plus');
     setCategoryID(p.category_id || 1355);
@@ -483,10 +487,7 @@ function HomePage({ showToast }) {
       <main className="main">
         <section className="section reveal visible search-profiles-section compact-profiles">
           <div className="section-header profiles-header-compact">
-            <div>
-              <div className="section-label">Профили поиска</div>
-              {selectedProfile && <div className="profile-inline-selected">Выбран: {selectedProfile.name}</div>}
-            </div>
+            <div className="section-label">Профили поиска</div>
             <button className="btn btn-primary btn-sm profiles-create" onClick={() => setProfileModal({})}><Plus size={18} />Новый профиль</button>
           </div>
           {!profiles.length ? (
@@ -508,7 +509,6 @@ function HomePage({ showToast }) {
                   {p.deep && <span>Deep</span>}
                 </div>
                 <div className="profile-actions compact-actions" aria-label="Действия профиля">
-                  {selectedProfile?.id === p.id && <span className="profile-active-dot" title="Выбран" />}
                   <span className="profile-action-link" onClick={(e) => { e.stopPropagation(); setProfileModal(p); }}><Edit3 size={14} /></span>
                   <span className="profile-action-link danger" onClick={(e) => { e.stopPropagation(); deleteProfile(p); }}><Trash2 size={14} /></span>
                 </div>
@@ -558,8 +558,8 @@ function ProfileModal({ profile, onClose, onSaved, showToast }) {
   </Modal>;
 }
 
-function Modal({ title, children, footer, onClose }) {
-  return <div className="modal visible"><div className="modal-overlay" onClick={onClose} /><div className="modal-content"><div className="modal-header"><h2 className="modal-title">{title}</h2><button className="modal-close" onClick={onClose}><X size={20} /></button></div><div className="modal-body">{children}</div><div className="modal-footer">{footer}</div></div></div>;
+function Modal({ title, children, footer, onClose, className = '' }) {
+  return <div className="modal visible"><div className="modal-overlay" onClick={onClose} /><div className={`modal-content ${className}`}><div className="modal-header"><h2 className="modal-title">{title}</h2><button className="modal-close" onClick={onClose}><X size={20} /></button></div><div className="modal-body">{children}</div><div className="modal-footer">{footer}</div></div></div>;
 }
 
 function SavedPage({ showToast }) {
@@ -580,7 +580,7 @@ function SavedPage({ showToast }) {
 function SavedDetail({ data, onClose, onDelete }) {
   const cheapest = data.cheapest || {};
   const allPlus = safeList(data.all_results).filter((r) => r.is_plus).sort((a, b) => (a.price || 0) - (b.price || 0)).slice(0, 50);
-  return <Modal title="Детали сохранённого результата" onClose={onClose} footer={<><button className="btn btn-danger" onClick={onDelete}>Удалить</button><button className="btn btn-secondary" onClick={onClose}>Закрыть</button></>}><div className="cheapest-card card" style={{ marginBottom: 20 }}><div className="cheapest-hero"><div className="cheapest-header"><span className="cheapest-badge">Самый дешёвый личный</span><Badge className={cheapest.account_type || 'neutral'}>{typeLabel(cheapest.account_type)}</Badge></div><div className="cheapest-price">{cheapest.price ?? '—'}<span className="cheapest-currency">{cheapest.currency || ''}</span></div><div className="cheapest-title">{cheapest.title || '—'}</div></div></div><div className="table-wrap"><table><thead><tr><th>Цена</th><th>Тип</th><th>Уверенность</th><th>Заголовок</th><th>Продавец</th><th>Ссылка</th></tr></thead><tbody>{allPlus.map((r, i) => <tr key={`${r.url || i}`} className={r.account_type || ''}><td>{priceText(r)}</td><td><Badge className={r.account_type || 'neutral'}>{typeLabel(r.account_type)}</Badge></td><td>{r.confidence?.toFixed?.(2) || '—'}</td><td>{r.title || ''}</td><td>{r.seller || ''}</td><td><a href={r.url || '#'} target="_blank" rel="noreferrer">Funpay ↗</a></td></tr>)}</tbody></table></div></Modal>;
+  return <Modal title="Детали сохранённого результата" className="modal-wide" onClose={onClose} footer={<><button className="btn btn-danger" onClick={onDelete}>Удалить</button><button className="btn btn-secondary" onClick={onClose}>Закрыть</button></>}><div className="cheapest-card card" style={{ marginBottom: 20 }}><div className="cheapest-hero"><div className="cheapest-header"><span className="cheapest-badge">Самый дешёвый личный</span><Badge className={cheapest.account_type || 'neutral'}>{typeLabel(cheapest.account_type)}</Badge></div><div className="cheapest-price">{cheapest.price ?? '—'}<span className="cheapest-currency">{cheapest.currency || ''}</span></div><div className="cheapest-title">{cheapest.title || '—'}</div></div></div><div className="table-wrap"><table><thead><tr><th>Цена</th><th>Тип</th><th>Уверенность</th><th>Заголовок</th><th>Продавец</th><th>Ссылка</th></tr></thead><tbody>{allPlus.map((r, i) => <tr key={`${r.url || i}`} className={r.account_type || ''}><td>{priceText(r)}</td><td><Badge className={r.account_type || 'neutral'}>{typeLabel(r.account_type)}</Badge></td><td>{r.confidence?.toFixed?.(2) || '—'}</td><td>{r.title || ''}</td><td>{r.seller || ''}</td><td><a href={r.url || '#'} target="_blank" rel="noreferrer">Funpay ↗</a></td></tr>)}</tbody></table></div></Modal>;
 }
 
 function SchedulerPage({ showToast }) {
