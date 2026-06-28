@@ -225,6 +225,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/results", s.protected(s.results))
 	s.mux.HandleFunc("/api/profile", s.protected(s.profileDashboard))
 	s.mux.HandleFunc("/api/settings", s.protected(s.settings))
+	s.mux.HandleFunc("/api/admin/settings", s.adminSettings)
 	s.mux.HandleFunc("/api/telegram/sync", s.protected(s.telegramSync))
 	s.mux.HandleFunc("/api/telegram/test", s.protected(s.telegramTest))
 	s.mux.HandleFunc("/api/profiles", s.protected(s.profiles))
@@ -401,9 +402,43 @@ func (s *Server) results(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	userID := requestUserID(r)
+	userTelegramChatID := s.telegramChatIDForUser(r.Context(), userID)
+	tgToken := s.cfg.EffectiveTelegramBotToken()
+	botUsername := ""
+	if tgToken != "" {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		if bot, err := telegram.NewWithProxy(tgToken, s.cfg.EffectiveTelegramProxyURL()).GetMe(ctx); err == nil {
+			botUsername = bot.Username
+		}
+		cancel()
+	}
+	jsonOut(w, map[string]any{
+		"telegram_bot_username":  botUsername,
+		"telegram_notifications": tgToken != "" && userTelegramChatID != "",
+	})
+}
+
+func adminCodeFromRequest(r *http.Request) string {
+	if c := strings.TrimSpace(r.Header.Get("X-Admin-Code")); c != "" {
+		return c
+	}
+	if c := strings.TrimSpace(r.URL.Query().Get("code")); c != "" {
+		return c
+	}
+	return ""
+}
+
+func (s *Server) adminSettings(w http.ResponseWriter, r *http.Request) {
+	if adminCodeFromRequest(r) != "1082" {
+		jsonOut(w, map[string]string{"error": "Неверный код администратора"}, http.StatusUnauthorized)
+		return
+	}
 	respond := func() {
-		userID := requestUserID(r)
-		userTelegramChatID := s.telegramChatIDForUser(r.Context(), userID)
 		key := s.cfg.EffectiveAPIKey()
 		set := config.LoadSettings(s.cfg.SettingsFile)
 		tgToken := s.cfg.EffectiveTelegramBotToken()
@@ -416,19 +451,18 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			cancel()
 		}
 		jsonOut(w, map[string]any{
-			"llm_provider":           s.cfg.EffectiveProvider(),
-			"llm_model":              s.cfg.EffectiveModel(),
-			"has_key":                key != "",
-			"llm_api_key":            maskSecret(key),
-			"telegram_has_token":     tgToken != "",
-			"telegram_bot_token":     maskSecret(tgToken),
-			"telegram_chat_id":       userTelegramChatID,
-			"telegram_bot_username":  botUsername,
-			"telegram_proxy":         set.TelegramProxy,
-			"telegram_proxy_active":  s.cfg.EffectiveTelegramProxyURL() != "",
-			"funpay_proxy":           set.FunpayProxy,
-			"funpay_proxy_active":    s.cfg.EffectiveFunpayProxyURL() != "",
-			"telegram_notifications": tgToken != "" && userTelegramChatID != "",
+			"llm_provider":          s.cfg.EffectiveProvider(),
+			"llm_model":             s.cfg.EffectiveModel(),
+			"has_key":               key != "",
+			"llm_api_key":           maskSecret(key),
+			"telegram_has_token":    tgToken != "",
+			"telegram_bot_token":    maskSecret(tgToken),
+			"telegram_chat_id":      set.TelegramChatID,
+			"telegram_bot_username": botUsername,
+			"telegram_proxy":        set.TelegramProxy,
+			"telegram_proxy_active": s.cfg.EffectiveTelegramProxyURL() != "",
+			"funpay_proxy":          set.FunpayProxy,
+			"funpay_proxy_active":   s.cfg.EffectiveFunpayProxyURL() != "",
 		})
 	}
 	switch r.Method {
@@ -446,7 +480,9 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		} else if k := orStr(d["api_key"], ""); k != "" {
 			set.LLMAPIKey = k
 		}
-		if m := orStr(d["llm_model"], orStr(d["model"], "")); m != "" {
+		if _, ok := d["llm_model"]; ok {
+			set.LLMModel = orStr(d["llm_model"], "")
+		} else if m := orStr(d["model"], ""); m != "" {
 			set.LLMModel = m
 		}
 		if _, ok := d["telegram_bot_token"]; ok {
@@ -461,7 +497,10 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		if _, ok := d["funpay_proxy"]; ok {
 			set.FunpayProxy = orStr(d["funpay_proxy"], "")
 		}
-		_ = config.SaveSettings(s.cfg.SettingsFile, set)
+		if err := config.SaveSettings(s.cfg.SettingsFile, set); err != nil {
+			jsonOut(w, map[string]string{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
 		respond()
 	default:
 		http.NotFound(w, r)

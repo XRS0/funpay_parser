@@ -188,7 +188,7 @@ function safeList(value) {
 
 function currentPath() {
   const p = window.location.pathname;
-  return ['/', '/saved', '/scheduler', '/settings', '/profile'].includes(p) ? p : '/';
+  return ['/', '/saved', '/scheduler', '/settings', '/profile', '/admin'].includes(p) ? p : '/';
 }
 
 function navigate(path) {
@@ -907,19 +907,8 @@ function ProfilePage({ showToast, user, onUserUpdate }) {
 }
 
 function SettingsPage({ showToast, onLogout }) {
-  const [data, setData] = useState(null);
   const [account, setAccount] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  const [provider, setProvider] = useState('fireworks');
-  const [model, setModel] = useState('');
-  const [key, setKey] = useState('');
-  const [tgToken, setTgToken] = useState('');
-  const [tgChat, setTgChat] = useState('');
-  const [tgProxy, setTgProxy] = useState('');
-  const [funpayProxy, setFunpayProxy] = useState('');
-  const [editLLM, setEditLLM] = useState(false);
-  const [editTelegram, setEditTelegram] = useState(false);
-  const [editFunpay, setEditFunpay] = useState(false);
   const [editAccount, setEditAccount] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -927,27 +916,13 @@ function SettingsPage({ showToast, onLogout }) {
   const [accountBusy, setAccountBusy] = useState(false);
   const load = useCallback(async () => {
     try {
-      const [d, me] = await Promise.all([
-        api('/api/settings'),
-        api('/api/auth/me', { authRedirect: false }).catch(() => null),
-      ]);
-      setData(d);
+      const me = await api('/api/auth/me', { authRedirect: false }).catch(() => null);
       setAccount(me);
-      setProvider(d.llm_provider || 'fireworks');
-      setModel(d.llm_model || '');
-      setTgChat(d.telegram_chat_id || '');
-      setTgProxy(d.telegram_proxy || '');
-      setFunpayProxy(d.funpay_proxy || '');
     } finally {
       setLoaded(true);
     }
   }, []);
   useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
-  const saveLLM = async () => { if (!key && !window.confirm('Пустое поле удалит текущий ключ. Продолжить?')) return; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ llm_provider: provider, llm_model: model.trim(), llm_api_key: key.trim() }) }); setKey(''); setEditLLM(false); await load(); showToast('LLM сохранён'); } catch (err) { showToast(err.message, true); } };
-  const saveTelegram = async () => { const body = { telegram_chat_id: tgChat.trim(), telegram_proxy: tgProxy.trim() }; const token = tgToken.trim(); if (token || window.confirm('Пустое поле token удалит текущий token. Продолжить?')) body.telegram_bot_token = token; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }); setTgToken(''); setEditTelegram(false); await load(); showToast('Telegram сохранён'); } catch (err) { showToast(err.message, true); } };
-  const saveFunpay = async () => { try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ funpay_proxy: funpayProxy.trim() }) }); setEditFunpay(false); await load(); showToast('Funpay proxy сохранён'); } catch (err) { showToast(err.message, true); } };
-  const syncTelegram = async () => { try { const d = await api('/api/telegram/sync', { method: 'POST' }); setTgChat(d.chat_id || ''); await load(); showToast('Чат найден'); } catch (err) { showToast(err.message, true); } };
-  const testTelegram = async () => { try { await api('/api/telegram/test', { method: 'POST' }); showToast('Тест отправлен'); } catch (err) { showToast(err.message, true); } };
   const savePassword = async () => {
     if (newPassword.length < 6) { showToast('Новый пароль должен быть минимум 6 символов', true); return; }
     if (newPassword !== confirmPassword) { showToast('Пароли не совпадают', true); return; }
@@ -966,37 +941,38 @@ function SettingsPage({ showToast, onLogout }) {
   if (!loaded) {
     return <main className="main settings-page lean-settings"><SettingsSkeleton /></main>;
   }
-  const llmReady = !!data?.has_key;
-  const telegramReady = !!data?.telegram_notifications;
-  const proxyReady = !!data?.telegram_proxy_active;
-  const funpayProxyReady = !!data?.funpay_proxy_active;
-  return <>
-    <main className="main settings-page lean-settings">
-      <section className="settings-summary-row reveal visible">
-        <div className={`settings-pill ${llmReady ? 'ready' : ''}`}><KeyRound size={16} />LLM: {llmReady ? 'готов' : 'нет ключа'}</div>
-        <div className={`settings-pill ${telegramReady ? 'ready' : ''}`}><Bot size={16} />Telegram: {telegramReady ? 'включён' : 'выключен'}</div>
-        <div className={`settings-pill ${funpayProxyReady ? 'ready' : ''}`}><Route size={16} />Funpay proxy: {funpayProxyReady ? 'активен' : 'нет'}</div>
-        <div className={`settings-pill ${proxyReady ? 'ready' : ''}`}><Wifi size={16} />Telegram proxy: {proxyReady ? 'активен' : 'нет'}</div>
-      </section>
+  const linked = !!account?.telegram_chat_id;
+  return <main className="main settings-page user-settings-page">
+    <section className="settings-human-hero reveal visible">
+      <div className="settings-human-copy">
+        <span className="section-kicker">Личный кабинет</span>
+        <h2>Только то, что касается тебя</h2>
+        <p>Системные параметры вынесены в админку. Здесь остались аккаунт, пароль и персональная привязка Telegram.</p>
+      </div>
+      <div className="settings-human-status">
+        <Badge className={linked ? 'success' : 'neutral'}>{linked ? 'Telegram привязан' : 'Telegram не привязан'}</Badge>
+      </div>
+    </section>
 
-      <section className="settings-edit-card reveal visible account-settings-card">
-        <div className="settings-edit-head">
+    <section className="settings-human-grid reveal visible">
+      <article className="settings-human-card account-settings-card">
+        <div className="settings-human-card-head">
+          <div className="settings-human-icon"><UserCircle size={22} /></div>
           <div>
             <h2>Аккаунт</h2>
-            <div className="settings-readonly-grid">
-              <div><span>Имя</span><strong>{account?.name || '—'}</strong></div>
-              <div><span>Email</span><strong>{account?.email || 'текущий пользователь'}</strong></div>
-              <div><span>Роль</span><strong>{account?.role || 'user'}</strong></div>
-              <div><span>Вход</span><strong>{account?.telegram_username ? `Telegram @${account.telegram_username}` : 'email / password'}</strong></div>
-            </div>
-          </div>
-          <div className="settings-actions account-actions">
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditAccount((v) => !v)}>{editAccount ? 'Закрыть' : 'Поменять пароль'}</button>
-            <button className="btn btn-danger btn-sm" onClick={onLogout}><ShieldCheck size={18} />Выйти</button>
+            <p>Имя, вход и безопасная смена пароля.</p>
           </div>
         </div>
-        <TelegramLinkPanel account={account} showToast={showToast} onLinked={(u) => { setAccount(u); load(); }} />
-        {editAccount && <div className="settings-edit-body">
+        <div className="settings-readable-list">
+          <div><span>Имя</span><strong>{account?.name || '—'}</strong></div>
+          <div><span>Email</span><strong>{account?.email || 'текущий пользователь'}</strong></div>
+          <div><span>Роль</span><strong>{account?.role || 'user'}</strong></div>
+        </div>
+        <div className="settings-actions account-actions">
+          <button className="btn btn-secondary btn-sm" onClick={() => setEditAccount((v) => !v)}>{editAccount ? 'Закрыть' : 'Поменять пароль'}</button>
+          <button className="btn btn-danger btn-sm" onClick={onLogout}><ShieldCheck size={18} />Выйти</button>
+        </div>
+        {editAccount && <div className="settings-edit-body human-edit-body">
           <div className="settings-form-grid two">
             <Field label="Текущий пароль"><input className="form-input clean-input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Текущий пароль" /></Field>
             <Field label="Новый пароль"><input className="form-input clean-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Минимум 6 символов" /></Field>
@@ -1004,74 +980,146 @@ function SettingsPage({ showToast, onLogout }) {
           <Field label="Повтор нового пароля"><input className="form-input clean-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Повтори новый пароль" /></Field>
           <div className="settings-actions"><button className={`btn btn-primary ${accountBusy ? 'btn-loading' : ''}`} disabled={accountBusy} onClick={savePassword}>Сменить пароль</button><button className="btn btn-ghost" onClick={() => { setEditAccount(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}>Отмена</button></div>
         </div>}
-      </section>
+      </article>
 
-      <section className="settings-edit-card reveal visible">
-        <div className="settings-edit-head">
-          <div>
-            <h2>LLM</h2>
-            <div className="settings-readonly-grid">
-              <div><span>Провайдер</span><strong>{data?.llm_provider || provider}</strong></div>
-              <div><span>Модель</span><strong>{data?.llm_model || defaultModels[provider]}</strong></div>
-              <div><span>Ключ</span><strong>{llmReady ? data.llm_api_key : 'не задан'}</strong></div>
-            </div>
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => setEditLLM((v) => !v)}>{editLLM ? 'Закрыть' : 'Изменить'}</button>
-        </div>
-        {editLLM && <div className="settings-edit-body">
-          <div className="settings-form-grid two">
-            <Field label="Провайдер"><select className="form-input clean-input" value={provider} onChange={(e) => setProvider(e.target.value)}><option value="fireworks">Fireworks</option><option value="openrouter">OpenRouter</option></select></Field>
-            <Field label="Модель"><input className="form-input clean-input" value={model} onChange={(e) => setModel(e.target.value)} placeholder={defaultModels[provider]} /></Field>
-          </div>
-          <Field label="API ключ"><input className="form-input clean-input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Новый ключ" /></Field>
-          <div className="settings-actions"><button className="btn btn-primary" onClick={saveLLM}>Сохранить</button><button className="btn btn-ghost" onClick={() => { setEditLLM(false); setKey(''); load(); }}>Отмена</button></div>
-        </div>}
-      </section>
-
-
-      <section className="settings-edit-card reveal visible">
-        <div className="settings-edit-head">
-          <div>
-            <h2>Funpay</h2>
-            <div className="settings-readonly-grid">
-              <div><span>Proxy</span><strong>{funpayProxyReady ? (data?.funpay_proxy || 'env') : 'не задан'}</strong></div>
-              <div><span>Источник</span><strong>{data?.funpay_proxy ? 'настройки' : funpayProxyReady ? 'env PROXY' : '—'}</strong></div>
-              <div><span>Назначение</span><strong>только парсинг</strong></div>
-            </div>
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => setEditFunpay((v) => !v)}>{editFunpay ? 'Закрыть' : 'Изменить'}</button>
-        </div>
-        {editFunpay && <div className="settings-edit-body">
-          <Field label="Funpay proxy"><input className="form-input clean-input" value={funpayProxy} onChange={(e) => setFunpayProxy(e.target.value)} placeholder="socks5://127.0.0.1:10808" /></Field>
-          <div className="settings-actions"><button className="btn btn-primary" onClick={saveFunpay}>Сохранить</button><button className="btn btn-ghost" onClick={() => { setEditFunpay(false); load(); }}>Отмена</button></div>
-        </div>}
-      </section>
-
-      <section className="settings-edit-card reveal visible">
-        <div className="settings-edit-head">
+      <article className="settings-human-card telegram-account-card">
+        <div className="settings-human-card-head">
+          <div className="settings-human-icon"><Bot size={22} /></div>
           <div>
             <h2>Telegram</h2>
-            <div className="settings-readonly-grid telegram">
-              <div><span>Bot</span><strong>{data?.telegram_bot_username ? `@${data.telegram_bot_username}` : data?.telegram_has_token ? 'token задан' : 'не задан'}</strong></div>
-              <div><span>Chat ID</span><strong>{data?.telegram_chat_id || 'не задан'}</strong></div>
-              <div><span>Proxy</span><strong>{proxyReady ? (data?.telegram_proxy || 'env') : 'не задан'}</strong></div>
-              <div><span>Уведомления</span><strong>{telegramReady ? 'включены' : 'выключены'}</strong></div>
-            </div>
+            <p>Привязка нужна только для твоих персональных отчётов.</p>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => setEditTelegram((v) => !v)}>{editTelegram ? 'Закрыть' : 'Изменить'}</button>
         </div>
-        {editTelegram && <div className="settings-edit-body">
-          <div className="settings-form-grid two">
-            <Field label="Bot token"><input className="form-input clean-input" type="password" value={tgToken} onChange={(e) => setTgToken(e.target.value)} placeholder="Новый token" /></Field>
-            <Field label="Chat ID"><input className="form-input clean-input" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="Chat ID" /></Field>
+        <TelegramLinkPanel account={account} showToast={showToast} onLinked={(u) => { setAccount(u); load(); }} />
+      </article>
+
+      <article className="settings-human-card usage-note-card">
+        <div className="settings-human-card-head">
+          <div className="settings-human-icon"><Database size={22} /></div>
+          <div>
+            <h2>Данные</h2>
+            <p>История и результаты разделены между пользователями.</p>
           </div>
-          <Field label="Telegram proxy / VPN"><input className="form-input clean-input" value={tgProxy} onChange={(e) => setTgProxy(e.target.value)} placeholder="socks5://127.0.0.1:10808" /></Field>
-          <div className="settings-actions wrap"><button className="btn btn-primary" onClick={saveTelegram}>Сохранить</button><button className="btn btn-secondary" onClick={syncTelegram}>Найти чат</button><button className="btn btn-secondary" onClick={testTelegram}>Тест</button><button className="btn btn-ghost" onClick={() => { setEditTelegram(false); setTgToken(''); load(); }}>Отмена</button></div>
-        </div>}
-      </section>
-    </main>
-  </>;
+        </div>
+        <div className="settings-readable-list compact">
+          <div><span>Хранение</span><strong>последние 10 запусков</strong></div>
+          <div><span>Доступ</span><strong>только владелец</strong></div>
+          <div><span>Отчёты</span><strong>{linked ? 'в Telegram' : 'после привязки'}</strong></div>
+        </div>
+      </article>
+    </section>
+  </main>;
 }
+
+function AdminSettingsPage({ showToast }) {
+  const [code, setCode] = useState(sessionStorage.getItem('admin_code') || '');
+  const [unlocked, setUnlocked] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [provider, setProvider] = useState('fireworks');
+  const [model, setModel] = useState('');
+  const [llmKey, setLlmKey] = useState('');
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramProxy, setTelegramProxy] = useState('');
+  const [telegramChat, setTelegramChat] = useState('');
+  const [funpayProxy, setFunpayProxy] = useState('');
+  const [meta, setMeta] = useState(null);
+  const adminHeaders = useCallback(() => ({ 'X-Admin-Code': code.trim() }), [code]);
+  const hydrate = useCallback((d) => {
+    setMeta(d);
+    setProvider(d.llm_provider || 'fireworks');
+    setModel(d.llm_model || '');
+    setLlmKey('');
+    setTelegramToken('');
+    setTelegramProxy(d.telegram_proxy || '');
+    setTelegramChat(d.telegram_chat_id || '');
+    setFunpayProxy(d.funpay_proxy || '');
+  }, []);
+  const unlock = async () => {
+    try {
+      const d = await api('/api/admin/settings', { headers: adminHeaders(), authRedirect: false });
+      sessionStorage.setItem('admin_code', code.trim());
+      hydrate(d);
+      setUnlocked(true);
+      setLoaded(true);
+      showToast('Админка открыта');
+    } catch (err) { showToast(err.message || 'Неверный код', true); }
+  };
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = {
+        llm_provider: provider,
+        llm_model: model.trim(),
+        telegram_chat_id: telegramChat.trim(),
+        telegram_proxy: telegramProxy.trim(),
+        funpay_proxy: funpayProxy.trim(),
+      };
+      if (llmKey.trim()) body.llm_api_key = llmKey.trim();
+      if (telegramToken.trim()) body.telegram_bot_token = telegramToken.trim();
+      const d = await api('/api/admin/settings', { method: 'PUT', headers: adminHeaders(), body: JSON.stringify(body), authRedirect: false });
+      hydrate(d);
+      showToast('Системные настройки сохранены');
+    } catch (err) { showToast(err.message, true); }
+    finally { setSaving(false); }
+  };
+  useEffect(() => {
+    if (!code.trim()) return;
+    api('/api/admin/settings', { headers: adminHeaders(), authRedirect: false }).then((d) => { hydrate(d); setUnlocked(true); setLoaded(true); }).catch(() => setLoaded(true));
+  }, []);
+  if (!unlocked) {
+    return <main className="main admin-page">
+      <section className="admin-gate-card reveal visible">
+        <div className="settings-human-icon"><ShieldCheck size={24} /></div>
+        <div>
+          <span className="section-kicker">Админка</span>
+          <h2>Системные настройки</h2>
+          <p>Введите код администратора, чтобы открыть LLM, Telegram bot и прокси. Для старта код: 1082.</p>
+        </div>
+        <Field label="Код администратора"><input className="form-input clean-input" type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="1082" onKeyDown={(e) => { if (e.key === 'Enter') unlock(); }} /></Field>
+        <button className="btn btn-primary" onClick={unlock}>Войти в админку</button>
+      </section>
+    </main>;
+  }
+  if (!loaded) return <main className="main admin-page"><SettingsSkeleton /></main>;
+  return <main className="main admin-page">
+    <section className="settings-human-hero reveal visible admin-hero">
+      <div className="settings-human-copy">
+        <span className="section-kicker">Админка</span>
+        <h2>Системная конфигурация</h2>
+        <p>Эти параметры влияют на всех пользователей и не показываются в обычных настройках.</p>
+      </div>
+      <button className="btn btn-ghost btn-sm" onClick={() => { sessionStorage.removeItem('admin_code'); setUnlocked(false); setCode(''); }}>Закрыть доступ</button>
+    </section>
+    <section className="admin-settings-grid reveal visible">
+      <article className="settings-human-card">
+        <div className="settings-human-card-head"><div className="settings-human-icon"><KeyRound size={22} /></div><div><h2>LLM</h2><p>Провайдер, модель и API ключ классификации.</p></div></div>
+        <div className="settings-readable-list compact"><div><span>Статус</span><strong>{meta?.has_key ? 'ключ задан' : 'ключ не задан'}</strong></div><div><span>Текущий ключ</span><strong>{meta?.llm_api_key || '—'}</strong></div></div>
+        <div className="settings-form-grid two">
+          <Field label="Провайдер"><select className="form-input clean-input" value={provider} onChange={(e) => setProvider(e.target.value)}><option value="fireworks">Fireworks</option><option value="openrouter">OpenRouter</option></select></Field>
+          <Field label="Модель"><input className="form-input clean-input" value={model} onChange={(e) => setModel(e.target.value)} placeholder={defaultModels[provider]} /></Field>
+        </div>
+        <Field label="API ключ"><input className="form-input clean-input" type="password" value={llmKey} onChange={(e) => setLlmKey(e.target.value)} placeholder="Новый ключ, пусто = без изменений" /></Field>
+      </article>
+      <article className="settings-human-card">
+        <div className="settings-human-card-head"><div className="settings-human-icon"><Bot size={22} /></div><div><h2>Telegram bot</h2><p>Бот, общий chat fallback и отдельный proxy/VPN для Telegram.</p></div></div>
+        <div className="settings-readable-list compact"><div><span>Bot</span><strong>{meta?.telegram_bot_username ? `@${meta.telegram_bot_username}` : meta?.telegram_has_token ? 'token задан' : 'не задан'}</strong></div><div><span>Proxy</span><strong>{meta?.telegram_proxy_active ? 'активен' : 'не задан'}</strong></div></div>
+        <div className="settings-form-grid two">
+          <Field label="Bot token"><input className="form-input clean-input" type="password" value={telegramToken} onChange={(e) => setTelegramToken(e.target.value)} placeholder="Новый token, пусто = без изменений" /></Field>
+          <Field label="Fallback Chat ID"><input className="form-input clean-input" value={telegramChat} onChange={(e) => setTelegramChat(e.target.value)} placeholder="не обязателен" /></Field>
+        </div>
+        <Field label="Telegram proxy / VPN"><input className="form-input clean-input" value={telegramProxy} onChange={(e) => setTelegramProxy(e.target.value)} placeholder="socks5://127.0.0.1:10808" /></Field>
+      </article>
+      <article className="settings-human-card">
+        <div className="settings-human-card-head"><div className="settings-human-icon"><Route size={22} /></div><div><h2>Funpay proxy</h2><p>Отдельный proxy только для парсинга Funpay.</p></div></div>
+        <div className="settings-readable-list compact"><div><span>Статус</span><strong>{meta?.funpay_proxy_active ? 'активен' : 'не задан'}</strong></div><div><span>Текущее значение</span><strong>{meta?.funpay_proxy || 'env / пусто'}</strong></div></div>
+        <Field label="Funpay proxy"><input className="form-input clean-input" value={funpayProxy} onChange={(e) => setFunpayProxy(e.target.value)} placeholder="socks5://127.0.0.1:10808" /></Field>
+      </article>
+    </section>
+    <div className="admin-save-bar"><button className={`btn btn-primary ${saving ? 'btn-loading' : ''}`} disabled={saving} onClick={save}><Save size={18} />Сохранить системные настройки</button></div>
+  </main>;
+}
+
 
 function LoginPage({ onLogin, showToast }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -1226,6 +1274,7 @@ function App() {
   if (path === '/scheduler') page = <SchedulerPage showToast={showToast} />;
   if (path === '/settings') page = <SettingsPage showToast={showToast} onLogout={logout} />;
   if (path === '/profile') page = <ProfilePage showToast={showToast} user={currentUser} onUserUpdate={setCurrentUser} />;
+  if (path === '/admin') page = <AdminSettingsPage showToast={showToast} />;
   return <><Background /><div className='app'><Header user={currentUser} />{page}</div><Toast toast={toast} /></>;
 }
 
