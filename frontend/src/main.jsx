@@ -524,6 +524,7 @@ function HomePage({ showToast }) {
     try { await api(`/api/profiles/${p.id}`, { method: 'DELETE' }); if (selectedProfile?.id === p.id) setSelectedProfile(null); await loadProfiles(); showToast('Профиль удалён'); } catch (err) { showToast(err.message, true); }
   };
   const showStatusBlock = status.running || (hasLiveStatus && safeList(status.progress).length > 0);
+  const showResultsBlock = hasLiveStatus && (!!status.cheapest || !!status.result_summary);
 
   return (
     <>
@@ -580,7 +581,7 @@ function HomePage({ showToast }) {
         </section>
 
         {showStatusBlock && <section className="section reveal visible"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} status={status.status} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
-        <ResultsView status={status} selectedProfileId={selectedProfile?.id || status.profile_id} showToast={showToast} />
+        {showResultsBlock && <ResultsView status={status} selectedProfileId={selectedProfile?.id || status.profile_id} showToast={showToast} />}
       </main>
       {profileModal !== null && <ProfileModal profile={profileModal} onClose={() => setProfileModal(null)} onSaved={async (p) => { await loadProfiles(); setProfileModal(null); applyProfile(p); showToast('Профиль сохранён'); }} showToast={showToast} />}
     </>
