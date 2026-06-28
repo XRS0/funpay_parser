@@ -2775,3 +2775,117 @@ body {
   0%, 100% { opacity: 0.42; transform: scale(1); }
   50% { opacity: 0.66; transform: scale(1.04); }
 }
+
+/* Stable skeleton/loading states */
+.skeleton-line {
+  height: 16px;
+  min-width: 32px;
+  display: inline-block;
+  margin: 0;
+}
+
+.skeleton-list {
+  pointer-events: none;
+}
+
+.loading-screen {
+  min-height: 62vh;
+  display: grid;
+  place-items: center;
+}
+
+.loading-shell {
+  width: min(520px, 100%);
+  margin: 0 auto;
+}
+
+.loading-brand-card {
+  padding: 30px;
+  display: grid;
+  gap: 24px;
+}
+
+.loading-brand {
+  align-items: center;
+}
+
+.loading-brand-icon {
+  opacity: 0.82;
+}
+
+.loading-brand-copy {
+  display: grid;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.loading-brand-copy .skeleton-title {
+  width: 190px;
+  margin: 0;
+}
+
+.loading-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton-profile-card {
+  cursor: default;
+}
+
+.skeleton-profile-card:hover,
+.skeleton-saved-card:hover,
+.skeleton-settings-card:hover {
+  transform: none;
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.skeleton-profile-card .profile-main-line,
+.skeleton-profile-card .profile-meta-row {
+  width: 100%;
+}
+
+.skeleton-saved-card {
+  min-height: 132px;
+  cursor: default;
+}
+
+.skeleton-saved-card .saved-card-main {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton-saved-card .saved-summary {
+  gap: 8px;
+}
+
+.skeleton-summary-row .skeleton-pill,
+.skeleton-pill {
+  height: 42px;
+  min-width: 170px;
+  border-radius: 999px;
+}
+
+.skeleton-settings-card {
+  pointer-events: none;
+}
+
+.settings-skeleton-copy {
+  width: 100%;
+  display: grid;
+  gap: 14px;
+}
+
+.modal-loading {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+@media (max-width: 760px) {
+  .loading-brand-card { padding: 22px; }
+  .loading-brand-copy { min-width: 0; }
+  .skeleton-summary-row .skeleton-pill,
+  .skeleton-pill { min-width: 100%; }
+}

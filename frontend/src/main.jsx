@@ -57,6 +57,90 @@ async function api(path, options = {}) {
   return data;
 }
 
+
+function SkeletonLine({ className = '', style }) {
+  return <div className={`skeleton skeleton-line ${className}`} style={style} aria-hidden='true' />;
+}
+
+function AppLoadingScreen() {
+  return (
+    <main className='main loading-screen' aria-busy='true' aria-label='Загрузка приложения'>
+      <section className='section reveal visible loading-shell'>
+        <div className='loading-brand-card card'>
+          <div className='brand loading-brand'>
+            <div className='brand-icon loading-brand-icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'><circle cx='12' cy='12' r='5' /><ellipse cx='12' cy='12' rx='9' ry='3' transform='rotate(-35 12 12)' /><circle cx='19' cy='8' r='1.5' fill='currentColor' stroke='none' /></svg></div>
+            <div className='loading-brand-copy'><SkeletonLine className='skeleton-title' /><SkeletonLine style={{ width: 130 }} /></div>
+          </div>
+          <div className='loading-stack'>
+            <SkeletonLine style={{ width: '88%' }} />
+            <SkeletonLine style={{ width: '72%' }} />
+            <SkeletonLine style={{ width: '46%' }} />
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ProfileListSkeleton() {
+  return (
+    <div className='profiles-list compact-list skeleton-list' aria-hidden='true'>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div className='profile-card compact-profile-card skeleton-profile-card' key={i}>
+          <div className='profile-main-line'><SkeletonLine style={{ width: 150 }} /><SkeletonLine style={{ width: 220 }} /></div>
+          <div className='profile-meta-row compact'><SkeletonLine style={{ width: 54 }} /><SkeletonLine style={{ width: 78 }} /><SkeletonLine style={{ width: 62 }} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SavedGridSkeleton({ count = 4 }) {
+  return (
+    <div className='saved-grid skeleton-list' aria-hidden='true'>
+      {Array.from({ length: count }).map((_, i) => (
+        <div className='saved-card skeleton-saved-card' key={i}>
+          <div className='saved-card-main'>
+            <SkeletonLine style={{ width: 190 }} />
+            <SkeletonLine className='skeleton-title' style={{ width: 110 }} />
+            <div className='saved-summary'><SkeletonLine style={{ width: 68 }} /><SkeletonLine style={{ width: 76 }} /><SkeletonLine style={{ width: 88 }} /></div>
+          </div>
+          <div className='saved-actions'><SkeletonLine style={{ width: 42, height: 42, borderRadius: 14 }} /><SkeletonLine style={{ width: 42, height: 42, borderRadius: 14 }} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SettingsSkeleton() {
+  return (
+    <>
+      <section className='settings-summary-row reveal visible skeleton-summary-row' aria-hidden='true'>
+        {Array.from({ length: 4 }).map((_, i) => <SkeletonLine className='settings-pill skeleton-pill' key={i} />)}
+      </section>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <section className='settings-edit-card reveal visible skeleton-settings-card' key={i} aria-hidden='true'>
+          <div className='settings-edit-head'>
+            <div className='settings-skeleton-copy'>
+              <SkeletonLine className='skeleton-title' style={{ width: 120 }} />
+              <div className='settings-readonly-grid'>
+                <SkeletonLine style={{ width: '100%', height: 54 }} />
+                <SkeletonLine style={{ width: '100%', height: 54 }} />
+                <SkeletonLine style={{ width: '100%', height: 54 }} />
+              </div>
+            </div>
+            <SkeletonLine style={{ width: 96, height: 38, borderRadius: 999 }} />
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+function DetailSkeletonModal({ onClose }) {
+  return <Modal title='Загрузка деталей' className='modal-wide' onClose={onClose} footer={<button className='btn btn-secondary' onClick={onClose}>Закрыть</button>}><div className='modal-loading' aria-busy='true'><SkeletonLine className='skeleton-title' style={{ width: '45%' }} /><SkeletonLine style={{ width: '90%' }} /><SkeletonLine style={{ width: '82%' }} /><div style={{ height: 16 }} />{Array.from({ length: 5 }).map((_, i) => <SkeletonLine key={i} style={{ width: `${96 - i * 8}%`, height: 36 }} />)}</div></Modal>;
+}
+
 function useToast() {
   const [toast, setToast] = useState(null);
   const timer = useRef(null);
@@ -470,6 +554,7 @@ function ResultsView({ status, selectedProfileId, showToast }) {
 
 function HomePage({ showToast }) {
   const [profiles, setProfiles] = useState([]);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profileModal, setProfileModal] = useState(null);
   const [query, setQuery] = useState('chatgpt plus');
@@ -481,7 +566,11 @@ function HomePage({ showToast }) {
   const [hasLiveStatus, setHasLiveStatus] = useState(false);
 
   const loadProfiles = useCallback(async () => {
-    setProfiles(await api('/api/profiles'));
+    try {
+      setProfiles(await api('/api/profiles'));
+    } finally {
+      setProfilesLoaded(true);
+    }
   }, []);
   const pollStatus = useCallback(async () => {
     try {
@@ -546,7 +635,9 @@ function HomePage({ showToast }) {
             <div className="section-label">Профили поиска</div>
             <button className="btn btn-primary btn-sm profiles-create" onClick={() => setProfileModal({})}><Plus size={18} />Новый профиль</button>
           </div>
-          {!profiles.length ? (
+          {!profilesLoaded ? (
+            <ProfileListSkeleton />
+          ) : !profiles.length ? (
             <div className="profiles-empty-compact">
               <span>Профилей нет</span>
               <button className="btn btn-secondary btn-sm" onClick={() => setProfileModal({})}>Создать</button>
@@ -629,16 +720,28 @@ function Modal({ title, children, footer, onClose, className = '' }) {
 function SavedPage({ showToast }) {
   const [profiles, setProfiles] = useState([]);
   const [saved, setSaved] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const load = useCallback(async () => {
-    const [p, s] = await Promise.all([api('/api/profiles'), api('/api/saved_results')]);
-    setProfiles(p); setSaved(s);
+    try {
+      const [p, s] = await Promise.all([api('/api/profiles'), api('/api/saved_results')]);
+      setProfiles(p);
+      setSaved(s);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
   useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
   const profileName = (id) => profiles.find((p) => p.id === id)?.name || `Профиль #${id}`;
   const del = async (id) => { if (!window.confirm('Удалить результат?')) return; try { await api(`/api/saved_results/${id}`, { method: 'DELETE' }); await load(); showToast('Результат удалён'); } catch (err) { showToast(err.message, true); } };
-  const open = async (id) => { try { setDetail(await api(`/api/saved_results/${id}`)); } catch (err) { showToast(err.message, true); } };
-  return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">История запусков</div><button className="btn btn-ghost btn-sm" onClick={load}>Обновить</button></div>{!saved.length && <div className="empty-state"><div className="empty-title">Нет сохранённых результатов</div><div className="empty-text">Запусти парсер с профилем на главной странице, и результат появится здесь.</div></div>}<div className="saved-grid stagger visible">{saved.map((r, i) => <div className="saved-card stagger-item" key={r.id} style={{ animationDelay: `${i * 0.05}s` }} onClick={() => open(r.id)}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>{formatDate(r.run_at)}</span></div><div className="saved-profile"><Badge className="plan">{profileName(r.profile_id)}</Badge></div><div className="saved-price">{priceText(r.cheapest)}</div><div className="saved-summary"><Badge>{r.summary?.total_plus || 0} Plus</Badge><Badge>{r.summary?.classified || 0} LLM</Badge><Badge className="personal">{r.summary?.personal || 0} личных</Badge><Badge className="shared">{r.summary?.shared || 0} общих</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); open(r.id); }}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); del(r.id); }}><Trash2 size={18} /></button></div></div>)}</div></section></main>{detail && <SavedDetail data={detail} onClose={() => setDetail(null)} onDelete={async () => { await del(detail.id); setDetail(null); }} />}</>;
+  const open = async (id) => {
+    setDetailLoading(true);
+    try { setDetail(await api(`/api/saved_results/${id}`)); }
+    catch (err) { showToast(err.message, true); }
+    finally { setDetailLoading(false); }
+  };
+  return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">История запусков</div><button className="btn btn-ghost btn-sm" disabled={!loaded} onClick={() => load().catch((err) => showToast(err.message, true))}>Обновить</button></div>{!loaded ? <SavedGridSkeleton /> : !saved.length ? <div className="empty-state"><div className="empty-title">Нет сохранённых результатов</div><div className="empty-text">Запусти парсер с профилем на главной странице, и результат появится здесь.</div></div> : <div className="saved-grid stagger visible">{saved.map((r, i) => <div className="saved-card stagger-item" key={r.id} style={{ animationDelay: `${i * 0.05}s` }} onClick={() => open(r.id)}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>{formatDate(r.run_at)}</span></div><div className="saved-profile"><Badge className="plan">{profileName(r.profile_id)}</Badge></div><div className="saved-price">{priceText(r.cheapest)}</div><div className="saved-summary"><Badge>{r.summary?.total_plus || 0} Plus</Badge><Badge>{r.summary?.classified || 0} LLM</Badge><Badge className="personal">{r.summary?.personal || 0} личных</Badge><Badge className="shared">{r.summary?.shared || 0} общих</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); open(r.id); }}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={(e) => { e.stopPropagation(); del(r.id); }}><Trash2 size={18} /></button></div></div>)}</div>}</section></main>{detailLoading && !detail && <DetailSkeletonModal onClose={() => setDetailLoading(false)} />}{detail && <SavedDetail data={detail} onClose={() => setDetail(null)} onDelete={async () => { await del(detail.id); setDetail(null); }} />}</>;
 }
 
 function SavedDetail({ data, onClose, onDelete }) {
@@ -650,22 +753,30 @@ function SavedDetail({ data, onClose, onDelete }) {
 function SchedulerPage({ showToast }) {
   const [profiles, setProfiles] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [profileID, setProfileID] = useState('');
   const [interval, setIntervalValue] = useState(60);
   const load = useCallback(async () => {
-    const [p, s] = await Promise.all([api('/api/profiles'), api('/api/schedules')]);
-    setProfiles(p); setSchedules(s); setProfileID((old) => old || String(p[0]?.id || ''));
+    try {
+      const [p, s] = await Promise.all([api('/api/profiles'), api('/api/schedules')]);
+      setProfiles(p);
+      setSchedules(s);
+      setProfileID((old) => old || String(p[0]?.id || ''));
+    } finally {
+      setLoaded(true);
+    }
   }, []);
   useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
   const add = async () => { try { await api('/api/schedules', { method: 'POST', body: JSON.stringify({ profile_id: Number(profileID), interval_minutes: Number(interval), enabled: true }) }); await load(); showToast('Расписание добавлено'); } catch (err) { showToast(err.message, true); } };
   const toggle = async (id, enabled) => { try { await api(`/api/schedules/${id}`, { method: 'PUT', body: JSON.stringify({ enabled }) }); await load(); showToast(enabled ? 'Расписание активировано' : 'Расписание остановлено'); } catch (err) { showToast(err.message, true); } };
   const runNow = async (id) => { try { await api(`/api/schedules/${id}/run`, { method: 'POST' }); showToast('Запуск по расписанию начат'); } catch (err) { showToast(err.message, true); } };
   const del = async (id) => { if (!window.confirm('Удалить расписание?')) return; try { await api(`/api/schedules/${id}`, { method: 'DELETE' }); await load(); showToast('Расписание удалено'); } catch (err) { showToast(err.message, true); } };
-  return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">Добавить расписание</div></div><div className="card"><div className="form-grid"><Field label="Профиль"><select className="form-input" value={profileID} disabled={!profiles.length} onChange={(e) => setProfileID(e.target.value)}>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Интервал (минут)"><input className="form-input" type="number" value={interval} min="1" onChange={(e) => setIntervalValue(e.target.value)} /></Field></div><div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={!profiles.length} onClick={add}>Добавить расписание</button></div></div></section><section className="section reveal visible"><div className="section-header"><div className="section-label">Активные расписания</div><button className="btn btn-ghost btn-sm" onClick={load}>Обновить</button></div>{!schedules.length && <div className="empty-state"><div className="empty-title">Расписаний пока нет</div><div className="empty-text">Выбери профиль и интервал, чтобы парсер запускался автоматически.</div></div>}<div className="saved-grid stagger visible">{schedules.map((s, i) => <div className="saved-card stagger-item" key={s.id} style={{ animationDelay: `${i * 0.05}s` }}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>Интервал: {s.interval_minutes} мин</span></div><div className="saved-profile"><Badge className="plan">{s.profile_name}</Badge></div><div className="saved-summary"><Badge className={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Активно' : 'Остановлено'}</Badge><Badge>Следующий: {formatDate(s.next_run_at, false)}</Badge><Badge>Последний: {formatDate(s.last_run_at, false)}</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={() => runNow(s.id)}><Play size={18} /></button><button className="btn btn-icon" onClick={() => toggle(s.id, !s.enabled)}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={() => del(s.id)}><Trash2 size={18} /></button></div></div>)}</div></section></main></>;
+  return <><main className="main"><section className="section reveal visible"><div className="section-header"><div className="section-label">Добавить расписание</div></div><div className="card"><div className="form-grid"><Field label="Профиль"><select className="form-input" value={profileID} disabled={!loaded || !profiles.length} onChange={(e) => setProfileID(e.target.value)}>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Интервал (минут)"><input className="form-input" type="number" value={interval} min="1" onChange={(e) => setIntervalValue(e.target.value)} /></Field></div><div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={!loaded || !profiles.length} onClick={add}>Добавить расписание</button></div></div></section><section className="section reveal visible"><div className="section-header"><div className="section-label">Активные расписания</div><button className="btn btn-ghost btn-sm" disabled={!loaded} onClick={() => load().catch((err) => showToast(err.message, true))}>Обновить</button></div>{!loaded ? <SavedGridSkeleton count={3} /> : !schedules.length ? <div className="empty-state"><div className="empty-title">Расписаний пока нет</div><div className="empty-text">Выбери профиль и интервал, чтобы парсер запускался автоматически.</div></div> : <div className="saved-grid stagger visible">{schedules.map((s, i) => <div className="saved-card stagger-item" key={s.id} style={{ animationDelay: `${i * 0.05}s` }}><div className="saved-card-main"><div className="saved-date"><Clock size={18} /><span>Интервал: {s.interval_minutes} мин</span></div><div className="saved-profile"><Badge className="plan">{s.profile_name}</Badge></div><div className="saved-summary"><Badge className={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Активно' : 'Остановлено'}</Badge><Badge>Следующий: {formatDate(s.next_run_at, false)}</Badge><Badge>Последний: {formatDate(s.last_run_at, false)}</Badge></div></div><div className="saved-actions"><button className="btn btn-icon" onClick={() => runNow(s.id)}><Play size={18} /></button><button className="btn btn-icon" onClick={() => toggle(s.id, !s.enabled)}><Edit3 size={18} /></button><button className="btn btn-icon" onClick={() => del(s.id)}><Trash2 size={18} /></button></div></div>)}</div>}</section></main></>;
 }
 
 function SettingsPage({ showToast }) {
   const [data, setData] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const [provider, setProvider] = useState('fireworks');
   const [model, setModel] = useState('');
   const [key, setKey] = useState('');
@@ -676,13 +787,28 @@ function SettingsPage({ showToast }) {
   const [editLLM, setEditLLM] = useState(false);
   const [editTelegram, setEditTelegram] = useState(false);
   const [editFunpay, setEditFunpay] = useState(false);
-  const load = useCallback(async () => { const d = await api('/api/settings'); setData(d); setProvider(d.llm_provider || 'fireworks'); setModel(d.llm_model || ''); setTgChat(d.telegram_chat_id || ''); setTgProxy(d.telegram_proxy || ''); setFunpayProxy(d.funpay_proxy || ''); }, []);
+  const load = useCallback(async () => {
+    try {
+      const d = await api('/api/settings');
+      setData(d);
+      setProvider(d.llm_provider || 'fireworks');
+      setModel(d.llm_model || '');
+      setTgChat(d.telegram_chat_id || '');
+      setTgProxy(d.telegram_proxy || '');
+      setFunpayProxy(d.funpay_proxy || '');
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
   useEffect(() => { load().catch((err) => showToast(err.message, true)); }, [load, showToast]);
   const saveLLM = async () => { if (!key && !window.confirm('Пустое поле удалит текущий ключ. Продолжить?')) return; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ llm_provider: provider, llm_model: model.trim(), llm_api_key: key.trim() }) }); setKey(''); setEditLLM(false); await load(); showToast('LLM сохранён'); } catch (err) { showToast(err.message, true); } };
   const saveTelegram = async () => { const body = { telegram_chat_id: tgChat.trim(), telegram_proxy: tgProxy.trim() }; const token = tgToken.trim(); if (token || window.confirm('Пустое поле token удалит текущий token. Продолжить?')) body.telegram_bot_token = token; try { await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }); setTgToken(''); setEditTelegram(false); await load(); showToast('Telegram сохранён'); } catch (err) { showToast(err.message, true); } };
   const saveFunpay = async () => { try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ funpay_proxy: funpayProxy.trim() }) }); setEditFunpay(false); await load(); showToast('Funpay proxy сохранён'); } catch (err) { showToast(err.message, true); } };
   const syncTelegram = async () => { try { const d = await api('/api/telegram/sync', { method: 'POST' }); setTgChat(d.chat_id || ''); await load(); showToast('Чат найден'); } catch (err) { showToast(err.message, true); } };
   const testTelegram = async () => { try { await api('/api/telegram/test', { method: 'POST' }); showToast('Тест отправлен'); } catch (err) { showToast(err.message, true); } };
+  if (!loaded) {
+    return <main className="main settings-page lean-settings"><SettingsSkeleton /></main>;
+  }
   const llmReady = !!data?.has_key;
   const telegramReady = !!data?.telegram_notifications;
   const proxyReady = !!data?.telegram_proxy_active;
@@ -888,7 +1014,7 @@ function App() {
   };
 
   if (checking) {
-    return <><Background /><div className='app'><div className='empty-state' style={{ paddingTop: 120 }}><div className='empty-title'>Загрузка...</div></div></div><Toast toast={toast} /></>;
+    return <><Background /><div className='app'><AppLoadingScreen /></div><Toast toast={toast} /></>;
   }
   if (!authenticated) {
     return <><Background /><div className='app'><LoginPage onLogin={() => setAuthenticated(true)} showToast={showToast} /></div><Toast toast={toast} /></>;
