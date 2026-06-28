@@ -429,12 +429,17 @@ function HomePage({ showToast }) {
   const [pages, setPages] = useState('');
   const [deep, setDeep] = useState(false);
   const [status, setStatus] = useState({ running: false, status: 'idle', progress: [] });
+  const [hasLiveStatus, setHasLiveStatus] = useState(false);
 
   const loadProfiles = useCallback(async () => {
     setProfiles(await api('/api/profiles'));
   }, []);
   const pollStatus = useCallback(async () => {
-    try { setStatus(await api('/status')); } catch { /* ignore */ }
+    try {
+      const next = await api('/status');
+      if (next.running) setHasLiveStatus(true);
+      setStatus(next);
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -459,6 +464,7 @@ function HomePage({ showToast }) {
 
   const run = async () => {
     try {
+      setHasLiveStatus(true);
       await api('/run', { method: 'POST', body: JSON.stringify(selectedProfile ? { profile_id: selectedProfile.id } : { query, category_id: Number(categoryID), candidates: Number(candidates), pages: pages ? Number(pages) : 0, deep }) });
       showToast('Парсер запущен');
       await pollStatus();
@@ -480,6 +486,7 @@ function HomePage({ showToast }) {
     if (!window.confirm(`Удалить профиль «${p.name}»?`)) return;
     try { await api(`/api/profiles/${p.id}`, { method: 'DELETE' }); if (selectedProfile?.id === p.id) setSelectedProfile(null); await loadProfiles(); showToast('Профиль удалён'); } catch (err) { showToast(err.message, true); }
   };
+  const showStatusBlock = status.running || (hasLiveStatus && safeList(status.progress).length > 0);
 
   return (
     <>
@@ -535,7 +542,7 @@ function HomePage({ showToast }) {
           </div>
         </section>
 
-        {(status.running || safeList(status.progress).length > 0) && <section className="section reveal visible"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
+        {showStatusBlock && <section className="section reveal visible"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
         <ResultsView status={status} selectedProfileId={selectedProfile?.id || status.profile_id} showToast={showToast} />
       </main>
       {profileModal !== null && <ProfileModal profile={profileModal} onClose={() => setProfileModal(null)} onSaved={async (p) => { await loadProfiles(); setProfileModal(null); applyProfile(p); showToast('Профиль сохранён'); }} showToast={showToast} />}
