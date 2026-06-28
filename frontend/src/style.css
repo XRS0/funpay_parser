@@ -2665,3 +2665,113 @@ select,
 @keyframes llm-orbit {
   to { transform: rotate(360deg); }
 }
+
+/* Background refinement: deeper space, calmer glow, subtle glass depth */
+:root {
+  --bg: #030305;
+  --bg-deep: #010102;
+  --bg-blue-mist: rgba(30, 64, 175, 0.11);
+  --bg-violet-mist: rgba(109, 40, 217, 0.09);
+  --bg-cyan-mist: rgba(34, 211, 238, 0.055);
+}
+
+html,
+body {
+  background:
+    radial-gradient(ellipse 86% 62% at 50% -18%, rgba(255,255,255,0.04) 0%, transparent 58%),
+    radial-gradient(circle at 17% 22%, var(--bg-blue-mist) 0%, transparent 31%),
+    radial-gradient(circle at 85% 18%, var(--bg-violet-mist) 0%, transparent 30%),
+    radial-gradient(circle at 50% 112%, rgba(15, 23, 42, 0.42) 0%, transparent 48%),
+    linear-gradient(180deg, #070708 0%, var(--bg) 42%, var(--bg-deep) 100%);
+}
+
+.bg-shapes {
+  z-index: 0;
+  opacity: 0.82;
+}
+
+.bg-shapes::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 96px 96px;
+  mask-image: radial-gradient(ellipse 72% 58% at 50% 36%, rgba(0,0,0,0.58), transparent 78%);
+  opacity: 0.22;
+  transform: translateZ(0);
+}
+
+.bg-shapes::after {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.018) 0%, transparent 58%),
+    linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.24) 100%);
+  animation: background-breathe 18s ease-in-out infinite;
+}
+
+.glow-layer {
+  z-index: 0;
+  opacity: 0.58;
+  mix-blend-mode: screen;
+}
+
+.stars-canvas {
+  z-index: 1;
+  opacity: 0.92;
+  filter: drop-shadow(0 0 3px rgba(255,255,255,0.28));
+}
+
+.app {
+  z-index: 2;
+}
+
+.shape {
+  filter: blur(155px) saturate(0.86);
+  transform: translate3d(0,0,0);
+}
+
+.shape-1 {
+  opacity: 0.19;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16) 0%, rgba(59,130,246,0.075) 34%, transparent 70%);
+}
+
+.shape-2 {
+  opacity: 0.12;
+  background: radial-gradient(circle at 50% 50%, rgba(59,130,246,0.18) 0%, rgba(168,85,247,0.055) 44%, transparent 72%);
+}
+
+.shape-3 {
+  opacity: 0.15;
+  background: radial-gradient(circle at 40% 40%, rgba(124,58,237,0.19) 0%, rgba(37,99,235,0.052) 42%, transparent 72%);
+}
+
+.shape-4 {
+  opacity: 0.15;
+  background: radial-gradient(circle at 40% 40%, rgba(34,211,238,0.14) 0%, rgba(59,130,246,0.045) 42%, transparent 72%);
+}
+
+.shape-5 {
+  opacity: 0.11;
+  background: radial-gradient(circle at 45% 45%, rgba(244,63,94,0.105) 0%, rgba(168,85,247,0.045) 42%, transparent 72%);
+}
+
+.card,
+.saved-card,
+.profile-card,
+.settings-edit-card,
+.settings-side-card,
+.selected-profile-panel,
+.profiles-empty-panel,
+.profiles-empty-compact,
+.modal-content {
+  box-shadow:
+    0 22px 80px rgba(0,0,0,0.76),
+    inset 0 1px 0 rgba(255,255,255,0.035);
+}
+
+@keyframes background-breathe {
+  0%, 100% { opacity: 0.42; transform: scale(1); }
+  50% { opacity: 0.66; transform: scale(1.04); }
+}
