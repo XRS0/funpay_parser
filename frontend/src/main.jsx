@@ -862,7 +862,7 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
   return <div className='telegram-link-box'>
     <div>
       <div className='telegram-link-title'>{account?.telegram_chat_id ? 'Telegram привязан' : 'Привязка Telegram'}</div>
-      <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : account?.telegram_chat_id ? `Chat ID ${account.telegram_chat_id}` : 'Одна кнопка откроет Telegram с готовым start-параметром. В боте останется только нажать Start — сайт сам подхватит привязку.'}</div>
+      {(account?.telegram_username || account?.telegram_chat_id) && <div className='telegram-link-text'>{account?.telegram_username ? `@${account.telegram_username}` : `Chat ID ${account.telegram_chat_id}`}</div>}
     </div>
     {linkInfo ? <div className='telegram-deeplink-panel'>
       <span>{polling ? 'Жду Start в Telegram…' : 'Можно открыть Telegram ещё раз'}</span>
@@ -1243,13 +1243,8 @@ function TelegramRequiredPage({ user, showToast, onLinked }) {
       <div className="telegram-required-card card">
         <div className="telegram-required-icon"><Bot size={30} /></div>
         <div className="section-label">Обязательная регистрация</div>
-        <h1>Сначала привяжи Telegram-бота</h1>
-        <p>Без Telegram аккаунт не активируется: так отчёты, сохранёнки и запуски будут жёстко разделены между пользователями. Нажми кнопку ниже, открой бота и нажми Start — сайт сам продолжит работу.</p>
+        <h1>Привяжи Telegram</h1>
         <TelegramLinkPanel account={user} showToast={showToast} onLinked={onLinked} />
-        <div className="telegram-required-note">
-          <ShieldCheck size={18} />
-          <span>Дальше приложение откроется автоматически. Вводить код руками не нужно.</span>
-        </div>
       </div>
     </section>
   </main>;
