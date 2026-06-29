@@ -159,6 +159,17 @@ func (s *Server) protected(next http.HandlerFunc) http.HandlerFunc {
 			jsonOut(w, map[string]string{"error": "invalid or expired token"}, 401)
 			return
 		}
+		if s.authStore != nil {
+			user, err := s.authStore.GetUserByID(r.Context(), claims.UserID)
+			if err != nil {
+				jsonOut(w, map[string]string{"error": "user not found"}, 401)
+				return
+			}
+			if user.TelegramChatID == 0 {
+				jsonOut(w, map[string]string{"error": "telegram_link_required"}, 403)
+				return
+			}
+		}
 		next(w, r.WithContext(context.WithValue(r.Context(), "claims", claims)))
 	}
 }

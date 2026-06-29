@@ -1237,6 +1237,24 @@ function GuidedOnboarding({ user, onComplete, showToast }) {
   </div>;
 }
 
+function TelegramRequiredPage({ user, showToast, onLinked }) {
+  return <main className="main telegram-required-page">
+    <section className="section reveal visible telegram-required-section">
+      <div className="telegram-required-card card">
+        <div className="telegram-required-icon"><Bot size={30} /></div>
+        <div className="section-label">Обязательная регистрация</div>
+        <h1>Сначала привяжи Telegram-бота</h1>
+        <p>Без Telegram аккаунт не активируется: так отчёты, сохранёнки и запуски будут жёстко разделены между пользователями. Нажми кнопку ниже, открой бота и нажми Start — сайт сам продолжит работу.</p>
+        <TelegramLinkPanel account={user} showToast={showToast} onLinked={onLinked} />
+        <div className="telegram-required-note">
+          <ShieldCheck size={18} />
+          <span>Дальше приложение откроется автоматически. Вводить код руками не нужно.</span>
+        </div>
+      </div>
+    </section>
+  </main>;
+}
+
 
 function LoginPage({ onLogin, showToast }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -1392,6 +1410,10 @@ function App() {
   if (path === '/settings') page = <SettingsPage showToast={showToast} onLogout={logout} />;
   if (path === '/profile') page = <ProfilePage showToast={showToast} user={currentUser} onUserUpdate={setCurrentUser} />;
   if (path === '/admin') page = <AdminSettingsPage showToast={showToast} />;
+  const needsTelegram = currentUser && !currentUser.telegram_chat_id;
+  if (needsTelegram) {
+    return <><Background /><div className='app'><Header user={currentUser} /><TelegramRequiredPage user={currentUser} showToast={showToast} onLinked={(u) => setCurrentUser(u)} /></div><Toast toast={toast} /></>;
+  }
   const showOnboarding = currentUser && currentUser.onboardingCompleted !== true;
   return <><Background /><div className='app'><Header user={currentUser} />{page}</div>{showOnboarding && <GuidedOnboarding user={currentUser} showToast={showToast} onComplete={(u) => setCurrentUser(u)} />}<Toast toast={toast} /></>;
 }
