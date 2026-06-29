@@ -45,39 +45,58 @@ func DealReportImage(res runner.Result) ([]byte, error) {
 }
 
 func drawReferenceBackground(img *image.RGBA) {
+	// Smooth dark space background: no architectural grid, no high-contrast pixel lines.
 	for y := 0; y < reportH; y++ {
 		for x := 0; x < reportW; x++ {
-			nx := float64(x) / reportW
-			ny := float64(y) / reportH
-			vignette := math.Hypot(nx-0.50, ny-0.45)
-			mid := math.Max(0, 1-vignette*1.25)
-			r := uint8(7 + 9*mid)
-			g := uint8(7 + 9*mid)
-			b := uint8(8 + 11*mid)
+			nx := float64(x) / float64(reportW)
+			ny := float64(y) / float64(reportH)
+			center := math.Hypot(nx-0.52, ny-0.42)
+			topGlow := math.Max(0, 1-math.Hypot(nx-0.32, ny-0.04)*1.6)
+			rightGlow := math.Max(0, 1-math.Hypot(nx-0.88, ny-0.18)*1.9)
+			bottomShade := ny * 10
+			mid := math.Max(0, 1-center*1.15)
+			r := clampByte(5 + 9*mid + 5*topGlow + 4*rightGlow - bottomShade)
+			g := clampByte(5 + 9*mid + 5*topGlow + 4*rightGlow - bottomShade)
+			b := clampByte(7 + 13*mid + 10*topGlow + 8*rightGlow - bottomShade)
 			img.SetRGBA(x, y, color.RGBA{r, g, b, 255})
 		}
 	}
-	// vertical architectural grid like the reference.
-	for x := 42; x < reportW; x += 31 {
-		a := uint8(18)
-		if x%124 == 42 {
-			a = 26
+
+	// Large blurred nebula glows behind cards.
+	drawGlow(img, 255, 128, 360, color.RGBA{120, 126, 150, 20})
+	drawGlow(img, 1400, 120, 420, color.RGBA{90, 96, 130, 22})
+	drawGlow(img, 1120, 780, 430, color.RGBA{65, 72, 92, 16})
+	drawGlow(img, 500, 890, 360, color.RGBA{80, 80, 92, 12})
+
+	// Subtle star field. Deterministic seed keeps reports visually stable.
+	r := rand.New(rand.NewSource(42))
+	for i := 0; i < 430; i++ {
+		x := r.Intn(reportW)
+		y := r.Intn(reportH)
+		// Keep the report card area readable.
+		if x > 70 && x < 1640 && y > 210 && y < 835 && r.Float64() < 0.58 {
+			continue
 		}
-		drawLine(img, x, 0, x, reportH, color.RGBA{255, 255, 255, a})
+		alpha := uint8(34 + r.Intn(88))
+		radius := 1
+		if r.Float64() < 0.16 {
+			radius = 2
+		}
+		star := color.RGBA{230, 232, 238, alpha}
+		fillCircle(img, x, y, radius, star)
+		if radius > 1 || r.Float64() < 0.18 {
+			drawGlow(img, x, y, 10+r.Intn(16), color.RGBA{210, 216, 236, uint8(10 + r.Intn(16))})
+		}
 	}
+
+	// Very soft vignette, without visible banding/grid.
 	for y := 0; y < reportH; y++ {
-		shade := uint8(float64(y) / reportH * 28)
 		for x := 0; x < reportW; x++ {
+			nx := float64(x) / float64(reportW)
+			ny := float64(y) / float64(reportH)
+			d := math.Hypot(nx-0.50, ny-0.46)
+			shade := uint8(math.Min(42, math.Max(0, (d-0.30)*60+ny*10)))
 			blend(img, x, y, color.RGBA{0, 0, 0, shade})
-		}
-	}
-	drawGlow(img, 270, 145, 230, color.RGBA{255, 255, 255, 12})
-	drawGlow(img, 1490, 110, 250, color.RGBA{128, 128, 160, 14})
-	r := rand.New(rand.NewSource(11))
-	for i := 0; i < 180; i++ {
-		x, y := r.Intn(reportW), r.Intn(reportH)
-		if r.Float64() < 0.65 {
-			blend(img, x, y, color.RGBA{255, 255, 255, uint8(20 + r.Intn(45))})
 		}
 	}
 }
@@ -86,12 +105,12 @@ func drawReferenceHeader(img *image.RGBA, now time.Time) {
 	white := color.RGBA{246, 246, 248, 255}
 	muted := color.RGBA{168, 168, 174, 255}
 	// logo block
-	drawRoundedRect(img, 92, 76, 98, 98, 18, color.RGBA{17, 17, 18, 210}, color.RGBA{255, 255, 255, 60})
+	drawRoundedRect(img, 92, 76, 98, 98, 18, color.RGBA{17, 17, 18, 210}, color.RGBA{255, 255, 255, 46})
 	drawPlanetLogo(img, 141, 125, 1.05, color.RGBA{246, 246, 248, 245})
 	drawText(img, 224, 122, "FUNPAY PARSER", white, 44, "bold")
 	drawText(img, 224, 162, "отчёт о парсинге предложений", muted, 25, "regular")
 	// report pill
-	drawRoundedRect(img, 1437, 76, 178, 56, 16, color.RGBA{15, 15, 16, 185}, color.RGBA{255, 255, 255, 52})
+	drawRoundedRect(img, 1437, 76, 178, 56, 16, color.RGBA{15, 15, 16, 185}, color.RGBA{255, 255, 255, 38})
 	drawTextCentered(img, 1437, 113, 178, "REPORT", color.RGBA{220, 220, 224, 255}, 22, "semibold")
 	drawText(img, 1439, 165, now.Format("02.01.2006 15:04"), muted, 23, "regular")
 }
@@ -100,11 +119,11 @@ func drawReferenceDealCard(img *image.RGBA, res runner.Result) {
 	cardX, cardY, cardW, cardH := 92, 222, 1524, 386
 	white := color.RGBA{245, 245, 248, 255}
 	muted := color.RGBA{169, 169, 174, 255}
-	line := color.RGBA{255, 255, 255, 54}
-	drawRoundedRect(img, cardX, cardY, cardW, cardH, 14, color.RGBA{18, 18, 19, 198}, color.RGBA{255, 255, 255, 46})
+	line := color.RGBA{255, 255, 255, 32}
+	drawRoundedRect(img, cardX, cardY, cardW, cardH, 14, color.RGBA{18, 18, 19, 198}, color.RGBA{255, 255, 255, 34})
 	drawLine(img, cardX+49, cardY+226, cardX+1002, cardY+226, line)
 	drawLine(img, cardX+1048, cardY+44, cardX+1048, cardY+340, line)
-	drawLine(img, cardX+370, cardY+257, cardX+370, cardY+347, color.RGBA{255, 255, 255, 36})
+	drawLine(img, cardX+370, cardY+257, cardX+370, cardY+347, color.RGBA{255, 255, 255, 24})
 
 	if res.Cheapest == nil {
 		drawText(img, cardX+50, cardY+125, "Персональный аккаунт не найден", white, 48, "semibold")
@@ -161,7 +180,7 @@ func drawReferenceStats(img *image.RGBA, res runner.Result) {
 func drawStatCard(img *image.RGBA, x, y, w, h int, label string, value int, icon string, bar float64) {
 	muted := color.RGBA{176, 176, 180, 255}
 	white := color.RGBA{225, 225, 229, 255}
-	drawRoundedRect(img, x, y, w, h, 14, color.RGBA{17, 17, 18, 196}, color.RGBA{255, 255, 255, 46})
+	drawRoundedRect(img, x, y, w, h, 14, color.RGBA{17, 17, 18, 196}, color.RGBA{255, 255, 255, 34})
 	drawStatIcon(img, x+48, y+60, icon, color.RGBA{230, 230, 234, 230})
 	drawText(img, x+91, y+50, label, muted, 17, "semibold")
 	drawText(img, x+91, y+105, fmt.Sprintf("%d", value), white, 43, "regular")
@@ -211,7 +230,7 @@ func reportFont(weight string, size float64) font.Face {
 	if f == nil {
 		return nil
 	}
-	face, _ := opentype.NewFace(f, &opentype.FaceOptions{Size: size, DPI: 72, Hinting: font.HintingFull})
+	face, _ := opentype.NewFace(f, &opentype.FaceOptions{Size: size, DPI: 72, Hinting: font.HintingNone})
 	return face
 }
 
@@ -435,6 +454,16 @@ func confidenceValue(l *models.Listing) float64 {
 	}
 	return v
 }
+func clampByte(v float64) uint8 {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return uint8(v)
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
