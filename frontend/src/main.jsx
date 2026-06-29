@@ -365,9 +365,9 @@ function Brand({ title, subtitle }) {
   );
 }
 
-function NavButton({ to, children, icon, active }) {
+function NavButton({ to, children, icon, active, tour }) {
   return (
-    <button type="button" className={`btn btn-secondary btn-sm nav-btn ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => { if (!active) navigate(to); }}>
+    <button type="button" data-tour={tour} className={`btn btn-secondary btn-sm nav-btn ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => { if (!active) navigate(to); }}>
       {icon}
       {children}
     </button>
@@ -380,8 +380,8 @@ function Header({ user }) {
     <header className='app-header'>
       <Brand title='Funpay Parser' subtitle='мабой' />
       <nav className='header-actions' aria-label='Основная навигация'>
-        <NavButton to='/' icon={<Play size={18} />} active={path === '/'}>Парсер</NavButton>
-        <NavButton to='/saved' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
+        <NavButton to='/' tour='parser-nav' icon={<Play size={18} />} active={path === '/'}>Парсер</NavButton>
+        <NavButton to='/saved' tour='saved-nav' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
         <NavButton to='/scheduler' icon={<Clock size={18} />} active={path === '/scheduler'}>Расписание</NavButton>
         <NavButton to='/settings' icon={<SettingsIcon size={18} />} active={path === '/settings'}>Настройки</NavButton>
       </nav>
@@ -638,7 +638,7 @@ function HomePage({ showToast }) {
   return (
     <>
       <main className="main">
-        <section className="section reveal visible search-profiles-section compact-profiles">
+        <section className="section reveal visible search-profiles-section compact-profiles" data-tour="profiles">
           <div className="section-header profiles-header-compact">
             <div className="section-label">Профили поиска</div>
             <button className="btn btn-primary btn-sm profiles-create" onClick={() => setProfileModal({})}><Plus size={18} />Новый профиль</button>
@@ -674,11 +674,11 @@ function HomePage({ showToast }) {
 
         <section className="section reveal visible">
           <div className="section-header"><div className="section-label">Текущий запуск</div><Badge>{selectedProfile ? selectedProfile.name : 'Без профиля'}</Badge></div>
-          <div className="card run-card">
+          <div className="card run-card" data-tour="run-card">
             <label className="run-label">Поисковый запрос</label>
             <div className="run-command">
-              <div className="input-icon run-input"><Search size={20} /><input value={query} onChange={(e) => { setQuery(e.target.value); setSelectedProfile(null); }} placeholder="например, chatgpt plus" /></div>
-              {!status.running ? <button className="btn btn-primary btn-lg run-btn" onClick={run}><Play size={20} /><span>Запустить</span></button> : <button className="btn btn-danger btn-lg stop-btn" onClick={stop}><Square size={20} /><span>Остановить</span></button>}
+              <div className="input-icon run-input" data-tour="query-input"><Search size={20} /><input value={query} onChange={(e) => { setQuery(e.target.value); setSelectedProfile(null); }} placeholder="например, chatgpt plus" /></div>
+              {!status.running ? <button className="btn btn-primary btn-lg run-btn" data-tour="run-button" onClick={run}><Play size={20} /><span>Запустить</span></button> : <button className="btn btn-danger btn-lg stop-btn" data-tour="run-button" onClick={stop}><Square size={20} /><span>Остановить</span></button>}
             </div>
             <div className="query-presets">{presets.map((p) => <button key={p} type="button" className="preset-btn" onClick={() => { setQuery(p); setSelectedProfile(null); }}>{p.replace(/\b\w/g, (m) => m.toUpperCase())}</button>)}</div>
             <div className="run-settings">
@@ -690,7 +690,7 @@ function HomePage({ showToast }) {
           </div>
         </section>
 
-        {showStatusBlock && <section className="section reveal visible"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} status={status.status} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
+        {showStatusBlock && <section className="section reveal visible" data-tour="status-block"><div className="section-header"><div className="section-label">Статус</div><div className={`status-badge ${status.running ? 'active' : status.status === 'Done' ? 'done' : 'idle'}`}><span className="status-dot" /><span className="status-text">{status.status || 'Ожидание'}</span></div></div><div className="card status-card"><StatusPipeline progress={safeList(status.progress)} status={status.status} /><div className="progress-terminal"><div>{safeList(status.progress).map((p, i) => <div key={`${p.time}-${i}`} className="progress-line"><span className="time">{p.time}</span> <span>{p.message}</span></div>)}</div>{status.running && <div className="progress-cursor"><span className="cursor" /></div>}</div></div></section>}
         {showResultsBlock && <ResultsView status={status} selectedProfileId={selectedProfile?.id || status.profile_id} showToast={showToast} />}
       </main>
       {profileModal !== null && <ProfileModal profile={profileModal} onClose={() => setProfileModal(null)} onSaved={async (p) => { await loadProfiles(); setProfileModal(null); applyProfile(p); showToast('Профиль сохранён'); }} showToast={showToast} />}
@@ -795,6 +795,11 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
     setPolling(false);
   }, []);
   useEffect(() => () => stopPolling(), [stopPolling]);
+  useEffect(() => {
+    if (!account?.telegram_chat_id) return;
+    stopPolling();
+    setLinkInfo(null);
+  }, [account?.telegram_chat_id, stopPolling]);
 
   const confirmCode = useCallback(async (code, silent = false) => {
     if (!code) return false;
@@ -821,12 +826,21 @@ function TelegramLinkPanel({ account, showToast, onLinked }) {
       attempts += 1;
       const ok = await confirmCode(code, true);
       if (ok) return;
+      const me = await api('/api/auth/me', { authRedirect: false }).catch(() => null);
+      if (me?.telegram_chat_id) {
+        lastPollError.current = '';
+        stopPolling();
+        setLinkInfo(null);
+        onLinked?.(me);
+        showToast('Telegram привязан');
+        return;
+      }
       if (attempts >= 45) {
         stopPolling();
         showToast(lastPollError.current || 'Telegram пока не ответил. Открой Telegram ещё раз и нажми Start.', true);
       }
     }, 2000);
-  }, [confirmCode, showToast, stopPolling]);
+  }, [confirmCode, onLinked, showToast, stopPolling]);
 
   const openTelegram = (d) => {
     if (d?.deep_link) window.open(d.deep_link, '_blank', 'noopener,noreferrer');
@@ -1128,169 +1142,97 @@ function AdminSettingsPage({ showToast }) {
 
 
 
-function OnboardingModal({ user, onComplete, showToast }) {
+
+function GuidedOnboarding({ user, onComplete, showToast }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [starterProfile, setStarterProfile] = useState(null);
-  const [profileBusy, setProfileBusy] = useState(false);
-  const [runBusy, setRunBusy] = useState(false);
-  const [runStarted, setRunStarted] = useState(false);
-  const [runStatus, setRunStatus] = useState(null);
-  const [savedResult, setSavedResult] = useState(null);
-  const [telegramSkipped, setTelegramSkipped] = useState(false);
-  const starterProfilePayload = {
-    name: 'Стартовый профиль',
-    query: 'chatgpt plus',
-    category_id: 1355,
-    candidates: 8,
-    max_pages: 1,
-    deep: false,
-  };
+  const [targetRect, setTargetRect] = useState(null);
   const steps = [
-    { icon: <Bot size={24} />, title: 'Привяжи Telegram', label: 'Telegram' },
-    { icon: <SlidersHorizontal size={24} />, title: 'Стартовый профиль', label: 'Профиль' },
-    { icon: <Play size={24} />, title: 'Запускаем реальный парсинг', label: 'Запуск' },
-    { icon: <Clock size={24} />, title: 'Смотрим процесс', label: 'Статус' },
-    { icon: <Database size={24} />, title: 'Разбираем результат', label: 'Результат' },
+    { selector: '[data-tour="parser-nav"]', title: 'Главная страница парсинга', text: 'Здесь запускаются проверки Funpay. Эта вкладка всегда возвращает тебя к рабочему экрану.', placement: 'bottom' },
+    { selector: '[data-tour="profiles"]', title: 'Профили поиска', text: 'Сохраняй частые запросы отдельными профилями: категория, лимиты, Deep mode и количество кандидатов.', placement: 'right' },
+    { selector: '[data-tour="query-input"]', title: 'Запрос и параметры', text: 'Введи, что искать на Funpay. Ниже можно поменять категорию, кандидатов и глубину проверки.', placement: 'bottom' },
+    { selector: '[data-tour="run-button"]', title: 'Кнопка запуска', text: 'Нажми “Запустить”, чтобы начать реальный сбор, фильтрацию и проверку через LLM.', placement: 'left' },
+    { selector: '[data-tour="saved-nav"]', title: 'Где смотреть результат', text: 'После завершения результат сохраняется в “Сохранёнках”: там история последних запусков и подробности.', placement: 'bottom' },
   ];
-  const finish = async () => {
+  const active = steps[step];
+  const finish = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     try {
       const updated = await api('/api/auth/onboarding', { method: 'POST', authRedirect: false });
       onComplete(updated || { ...user, onboardingCompleted: true });
+      showToast?.('Onboarding завершён');
     } catch (err) {
       showToast?.(err.message || 'Не удалось сохранить onboarding', true);
     } finally {
       setSaving(false);
     }
-  };
-  const createStarterProfile = async () => {
-    if (starterProfile || profileBusy) return starterProfile;
-    setProfileBusy(true);
-    try {
-      const existing = await api('/api/profiles').catch(() => []);
-      const found = Array.isArray(existing) ? existing.find((p) => p.name === starterProfilePayload.name) : null;
-      const profile = found || await api('/api/profiles', { method: 'POST', body: JSON.stringify(starterProfilePayload) });
-      setStarterProfile(profile);
-      showToast?.('Стартовый профиль готов');
-      return profile;
-    } catch (err) {
-      showToast?.(err.message || 'Не удалось создать стартовый профиль', true);
-      return null;
-    } finally {
-      setProfileBusy(false);
-    }
-  };
-  const pollRun = useCallback(async () => {
-    try {
-      const st = await api('/status');
-      setRunStatus(st);
-      if (!st.running && (st.cheapest || st.result_summary || st.status === 'Done')) {
-        const saved = await api(`/api/saved_results?profile_id=${starterProfile?.id || st.profile_id || ''}`).catch(() => []);
-        if (Array.isArray(saved) && saved.length) setSavedResult(saved[0]);
-        setStep(4);
-      }
-    } catch { /* keep onboarding alive even if one poll fails */ }
-  }, [starterProfile?.id]);
+  }, [onComplete, saving, showToast, user]);
+
   useEffect(() => {
-    if (!runStarted) return undefined;
-    pollRun();
-    const id = window.setInterval(pollRun, 1800);
-    return () => window.clearInterval(id);
-  }, [runStarted, pollRun]);
-  const startRealRun = async () => {
-    if (runBusy) return;
-    setRunBusy(true);
-    try {
-      const profile = starterProfile || await createStarterProfile();
-      if (!profile?.id) return;
-      await api(`/api/profiles/${profile.id}/run`, { method: 'POST' });
-      setRunStarted(true);
-      setStep(3);
-      showToast?.('Стартовый парсинг запущен');
-      window.setTimeout(pollRun, 600);
-    } catch (err) {
-      showToast?.(err.message || 'Не удалось запустить парсинг', true);
-    } finally {
-      setRunBusy(false);
-    }
-  };
-  const next = async () => {
-    if (step === 1 && !starterProfile) {
-      const profile = await createStarterProfile();
-      if (profile) setStep(2);
-      return;
-    }
-    if (step === 2) {
-      await startRealRun();
-      return;
-    }
-    if (step >= steps.length - 1) {
-      await finish();
-      return;
-    }
-    setStep((v) => v + 1);
-  };
-  const latestMessages = safeList(runStatus?.progress).slice(-4);
-  const summary = runStatus?.result_summary || savedResult?.summary;
-  const cheapest = runStatus?.cheapest || savedResult?.cheapest;
-  return <div className="onboarding-overlay practical-onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-    <div className="onboarding-card practical-onboarding-card reveal visible">
-      <button type="button" className="onboarding-skip" onClick={step === 0 ? () => { setTelegramSkipped(true); setStep(1); } : finish} disabled={saving}>{step === 0 ? 'Пропустить Telegram' : 'Пропустить'}</button>
-      <div className="onboarding-progress" aria-label={`Шаг ${step + 1} из ${steps.length}`}>
-        {steps.map((item, i) => <span key={item.label} className={i <= step ? 'active' : ''} title={item.label} />)}
+    const update = () => {
+      const el = document.querySelector(active.selector);
+      if (!el) {
+        setTargetRect(null);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      setTargetRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      el.scrollIntoView?.({ block: 'center', inline: 'center', behavior: 'smooth' });
+    };
+    update();
+    const id = window.setTimeout(update, 260);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [active.selector]);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape') finish();
+      if (event.key === 'ArrowRight') setStep((v) => Math.min(steps.length - 1, v + 1));
+      if (event.key === 'ArrowLeft') setStep((v) => Math.max(0, v - 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [finish, steps.length]);
+
+  const pad = 10;
+  const rect = targetRect ? {
+    top: Math.max(8, targetRect.top - pad),
+    left: Math.max(8, targetRect.left - pad),
+    width: targetRect.width + pad * 2,
+    height: targetRect.height + pad * 2,
+  } : null;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const tooltipWidth = Math.min(390, vw - 28);
+  const baseTop = rect ? rect.top + rect.height + 16 : 150;
+  const sideTop = rect ? rect.top + Math.min(10, rect.height / 2) : 150;
+  const tooltip = (() => {
+    if (!rect) return { top: 150, left: Math.max(14, (vw - tooltipWidth) / 2) };
+    if (active.placement === 'left') return { top: Math.min(vh - 260, Math.max(14, sideTop)), left: Math.max(14, rect.left - tooltipWidth - 18) };
+    if (active.placement === 'right') return { top: Math.min(vh - 260, Math.max(14, sideTop)), left: Math.min(vw - tooltipWidth - 14, rect.left + rect.width + 18) };
+    return { top: Math.min(vh - 260, Math.max(14, baseTop)), left: Math.min(vw - tooltipWidth - 14, Math.max(14, rect.left + rect.width / 2 - tooltipWidth / 2)) };
+  })();
+
+  return <div className="tour-layer" aria-live="polite">
+    <div className="tour-scrim" />
+    {rect && <div className="tour-spotlight" style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }} />}
+    <div className="tour-popover" style={{ top: tooltip.top, left: tooltip.left, width: tooltipWidth }} role="dialog" aria-label="Подсказка onboarding">
+      <div className="tour-kicker">Шаг {step + 1} из {steps.length}</div>
+      <h2>{active.title}</h2>
+      <p>{active.text}</p>
+      <div className="tour-progress" aria-hidden="true">{steps.map((_, i) => <span key={i} className={i <= step ? 'active' : ''} />)}</div>
+      <div className="tour-actions">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={finish} disabled={saving}>Пропустить</button>
+        {step > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStep((v) => Math.max(0, v - 1))} disabled={saving}>Назад</button>}
+        <button type="button" className={`btn btn-primary btn-sm ${saving ? 'btn-loading' : ''}`} onClick={step >= steps.length - 1 ? finish : () => setStep((v) => v + 1)} disabled={saving}>{step >= steps.length - 1 ? 'Начать' : 'Далее'}</button>
       </div>
-      <div className="onboarding-icon">{steps[step].icon}</div>
-      <div className="onboarding-step-label">Шаг {step + 1} из {steps.length} · {steps[step].label}</div>
-      <h2 id="onboarding-title">{steps[step].title}</h2>
-
-      {step === 0 && <div className="onboarding-live-block">
-        <p>Сразу привяжи Telegram, чтобы получать отчёты по своим запускам. Если не хочешь сейчас — нажми “Пропустить Telegram”, парсер всё равно заработает.</p>
-        <TelegramLinkPanel account={user} showToast={showToast} onLinked={(nextUser) => { onComplete(nextUser); showToast?.('Telegram привязан'); setStep(1); }} />
-      </div>}
-
-      {step === 1 && <div className="onboarding-live-block">
-        <p>Я подготовлю безопасный стартовый профиль: один листинг-раунд по ChatGPT Plus, чтобы ты увидел полный путь без ручной настройки.</p>
-        <div className="onboarding-profile-preview">
-          <div><span>Название</span><strong>{starterProfile?.name || starterProfilePayload.name}</strong></div>
-          <div><span>Запрос</span><strong>{starterProfilePayload.query}</strong></div>
-          <div><span>Категория</span><strong>{starterProfilePayload.category_id}</strong></div>
-          <div><span>Объём</span><strong>{starterProfilePayload.candidates} кандидатов · {starterProfilePayload.max_pages} страница</strong></div>
-        </div>
-      </div>}
-
-      {step === 2 && <div className="onboarding-live-block">
-        <p>Теперь запускаем реальный парсинг по стартовому профилю. Это настоящий запуск: сайт соберёт предложения, проверит кандидатов и сохранит результат.</p>
-        <div className="onboarding-note"><Play size={18} />Нажми “Начать”, и я покажу статус выполнения прямо здесь.</div>
-      </div>}
-
-      {step === 3 && <div className="onboarding-live-block">
-        <p>Парсинг идёт. Здесь видно реальные этапы: загрузка Funpay, фильтрация, проверка LLM и сохранение результата.</p>
-        <div className={`onboarding-run-status ${runStatus?.running ? 'active' : ''}`}>
-          <div><span>Статус</span><strong>{runStatus?.status || 'запускается...'}</strong></div>
-          <div><span>Профиль</span><strong>{starterProfile?.name || 'Стартовый профиль'}</strong></div>
-        </div>
-        <div className="onboarding-terminal">
-          {latestMessages.length ? latestMessages.map((p, i) => <div key={`${p.time}-${i}`}><span>{p.time}</span>{p.message}</div>) : <div><span>…</span>Жду первые события запуска</div>}
-        </div>
-      </div>}
-
-      {step === 4 && <div className="onboarding-live-block">
-        <p>Готово — теперь ты знаешь полный путь. Реальный результат можно открыть в “Сохранёнках”, а следующие запуски делать уже своим профилем.</p>
-        <div className="onboarding-result-card">
-          <div><span>Найдено Plus</span><strong>{summary?.total_plus ?? '—'}</strong></div>
-          <div><span>Проверено LLM</span><strong>{summary?.classified ?? '—'}</strong></div>
-          <div><span>Лучшее предложение</span><strong>{cheapest?.title || cheapest?.name || 'смотри сохранёнки'}</strong></div>
-        </div>
-      </div>}
-
-      <div className="onboarding-actions">
-        {step > 0 && step < 3 && <button type="button" className="btn btn-ghost" disabled={saving || profileBusy || runBusy} onClick={() => setStep((v) => Math.max(0, v - 1))}>Назад</button>}
-        {step === 4 && <button type="button" className="btn btn-secondary" onClick={async () => { await finish(); navigate('/saved'); }}>Открыть сохранёнки</button>}
-        <button type="button" className={`btn btn-primary ${(saving || profileBusy || runBusy) ? 'btn-loading' : ''}`} disabled={saving || profileBusy || runBusy || step === 3} onClick={next}>{step === 1 && !starterProfile ? 'Создать профиль' : step === 2 ? 'Начать' : step === 4 ? 'Начать работу' : 'Далее'}</button>
-      </div>
-      {telegramSkipped && step > 0 && <div className="onboarding-footnote">Telegram можно привязать позже в настройках.</div>}
     </div>
   </div>;
 }
@@ -1451,7 +1393,7 @@ function App() {
   if (path === '/profile') page = <ProfilePage showToast={showToast} user={currentUser} onUserUpdate={setCurrentUser} />;
   if (path === '/admin') page = <AdminSettingsPage showToast={showToast} />;
   const showOnboarding = currentUser && currentUser.onboardingCompleted !== true;
-  return <><Background /><div className='app'><Header user={currentUser} />{page}</div>{showOnboarding && <OnboardingModal user={currentUser} showToast={showToast} onComplete={(u) => setCurrentUser(u)} />}<Toast toast={toast} /></>;
+  return <><Background /><div className='app'><Header user={currentUser} />{page}</div>{showOnboarding && <GuidedOnboarding user={currentUser} showToast={showToast} onComplete={(u) => setCurrentUser(u)} />}<Toast toast={toast} /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
