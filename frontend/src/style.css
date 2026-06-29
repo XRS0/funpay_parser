@@ -4275,10 +4275,11 @@ body {
 
 /* Mandatory Telegram registration gate */
 .telegram-required-page {
-  min-height: 100vh;
+  min-height: calc(100vh - 96px);
   display: grid;
   align-items: center;
-  padding-top: 126px;
+  padding-top: 0;
+  padding-bottom: 32px;
 }
 .telegram-required-section {
   width: min(760px, calc(100vw - 32px));
@@ -4343,7 +4344,7 @@ body {
   border: 1px solid rgba(106,255,167,0.14);
 }
 @media (max-width: 620px) {
-  .telegram-required-page { padding-top: 110px; }
+  .telegram-required-page { min-height: calc(100vh - 88px); padding-top: 0; padding-bottom: 24px; }
   .telegram-required-note { align-items: flex-start; }
 }
 
