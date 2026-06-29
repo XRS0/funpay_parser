@@ -131,6 +131,30 @@ func (s *Store) GetProfile(ctx context.Context, userID int64, id int) (*Profile,
 	p.Deep = deep != 0
 	return &p, nil
 }
+
+func (s *Store) EnsureDefaultProfile(ctx context.Context, userID int64) error {
+	if userID <= 0 {
+		return nil
+	}
+	var count int
+	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM profiles WHERE user_id=?`, userID).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	maxPages := 5
+	_, err := s.CreateProfile(ctx, userID, Profile{
+		Name:       "ChatGPT Plus personal",
+		Query:      "chatgpt plus 30 дней",
+		CategoryID: 1355,
+		Candidates: 10,
+		MaxPages:   &maxPages,
+		Deep:       true,
+	})
+	return err
+}
+
 func (s *Store) CreateProfile(ctx context.Context, userID int64, p Profile) (Profile, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	r, err := s.DB.ExecContext(ctx, `INSERT INTO profiles(user_id,name,query,category_id,candidates,max_pages,deep,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, userID, p.Name, p.Query, p.CategoryID, p.Candidates, p.MaxPages, boolInt(p.Deep), now, now)

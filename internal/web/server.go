@@ -169,6 +169,12 @@ func (s *Server) protected(next http.HandlerFunc) http.HandlerFunc {
 				jsonOut(w, map[string]string{"error": "telegram_link_required"}, 403)
 				return
 			}
+			if s.st != nil {
+				if err := s.st.EnsureDefaultProfile(r.Context(), claims.UserID); err != nil {
+					jsonOut(w, map[string]string{"error": "failed to create default profile"}, 500)
+					return
+				}
+			}
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), "claims", claims)))
 	}
