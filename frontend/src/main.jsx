@@ -966,8 +966,6 @@ function SettingsPage({ showToast, onLogout }) {
     <section className="settings-human-hero reveal visible">
       <div className="settings-human-copy">
         <span className="section-kicker">Личный кабинет</span>
-        <h2>Только то, что касается тебя</h2>
-        <p>Системные параметры вынесены в админку. Здесь остались аккаунт, пароль и персональная привязка Telegram.</p>
       </div>
       <div className="settings-human-status">
         <Badge className={linked ? 'success' : 'neutral'}>{linked ? 'Telegram привязан' : 'Telegram не привязан'}</Badge>
