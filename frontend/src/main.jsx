@@ -376,8 +376,15 @@ function NavButton({ to, children, icon, active, tour }) {
 
 function Header({ user }) {
   const path = currentPath();
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   return (
-    <header className='app-header'>
+    <header className={`app-header ${scrolled ? 'scrolled' : ''}`}>
       <Brand title='Funpay Parser' subtitle='тест' />
       <nav className='header-actions' aria-label='Основная навигация'>
         <NavButton to='/' tour='parser-nav' icon={<Play size={18} />} active={path === '/'}>Парсер</NavButton>

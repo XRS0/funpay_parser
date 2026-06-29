@@ -4404,3 +4404,19 @@ body {
   0%, 100% { opacity: .62; }
   50% { opacity: 1; }
 }
+
+/* Header scroll separation: subtle dark layer only after scrolling */
+.app-header.scrolled {
+  padding: 10px 14px !important;
+  border-radius: 26px !important;
+  background: linear-gradient(180deg, rgba(7, 8, 12, 0.58), rgba(5, 5, 8, 0.42)) !important;
+  border: 1px solid rgba(255,255,255,0.075) !important;
+  box-shadow: 0 18px 54px rgba(0,0,0,0.34), 0 1px 0 rgba(255,255,255,0.035) inset !important;
+  backdrop-filter: blur(10px) !important;
+}
+@media (max-width: 720px) {
+  .app-header.scrolled {
+    padding: 10px 12px !important;
+    border-radius: 22px !important;
+  }
+}
