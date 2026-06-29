@@ -378,7 +378,7 @@ function Header({ user }) {
   const path = currentPath();
   return (
     <header className='app-header'>
-      <Brand title='Funpay Parser' subtitle='мабой' />
+      <Brand title='Funpay Parser' subtitle='тест' />
       <nav className='header-actions' aria-label='Основная навигация'>
         <NavButton to='/' tour='parser-nav' icon={<Play size={18} />} active={path === '/'}>Парсер</NavButton>
         <NavButton to='/saved' tour='saved-nav' icon={<Database size={18} />} active={path === '/saved'}>Сохранёнки</NavButton>
