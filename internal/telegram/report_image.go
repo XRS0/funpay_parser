@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"strings"
 	"time"
+	"unicode"
 
 	"funpay-parser/internal/models"
 	"funpay-parser/internal/runner"
@@ -211,6 +212,57 @@ func dealSubtitle(l *models.Listing) string {
 	return strings.Join(parts, "  +  ")
 }
 
+func sanitizeReportText(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(text))
+	lastSpace := false
+	for _, r := range text {
+		if isReportEmojiOrUnsupported(r) {
+			if !lastSpace && b.Len() > 0 {
+				b.WriteRune(' ')
+				lastSpace = true
+			}
+			continue
+		}
+		if unicode.IsControl(r) || r == unicode.ReplacementChar {
+			continue
+		}
+		if unicode.IsSpace(r) {
+			if !lastSpace && b.Len() > 0 {
+				b.WriteRune(' ')
+				lastSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		lastSpace = false
+	}
+	return strings.Trim(strings.TrimSpace(b.String()), " |•-—+·/\\,.;:")
+}
+
+func isReportEmojiOrUnsupported(r rune) bool {
+	// NotoSans embedded in the binary has no color emoji glyphs. Without this
+	// filter Go renders them as tofu squares in generated Telegram PNGs.
+	if r == 0x200D || r == 0x20E3 || r == 0xFE0E || r == 0xFE0F {
+		return true
+	}
+	switch {
+	case r >= 0x1F000 && r <= 0x1FAFF: // pictographs, emoticons, flags, symbols
+		return true
+	case r >= 0x2600 && r <= 0x27BF: // misc symbols/dingbats often emoji-presented
+		return true
+	case r >= 0x2300 && r <= 0x23FF: // technical emoji-like symbols
+		return true
+	case r >= 0xE0020 && r <= 0xE007F: // emoji tag sequences
+		return true
+	}
+	return false
+}
+
 func reportFont(weight string, size float64) font.Face {
 	name := "NotoSans-Regular.ttf"
 	switch weight {
@@ -236,6 +288,7 @@ func reportFont(weight string, size float64) font.Face {
 
 func drawText(img *image.RGBA, x, y int, text string, col color.RGBA, size float64, weight string) {
 	face := reportFont(weight, size)
+	text = sanitizeReportText(text)
 	if face == nil || text == "" {
 		return
 	}
@@ -245,6 +298,7 @@ func drawText(img *image.RGBA, x, y int, text string, col color.RGBA, size float
 
 func textWidth(text string, size float64, weight string) int {
 	face := reportFont(weight, size)
+	text = sanitizeReportText(text)
 	if face == nil || text == "" {
 		return 0
 	}
@@ -257,6 +311,7 @@ func drawTextCentered(img *image.RGBA, x, y, w int, text string, col color.RGBA,
 }
 
 func drawTextWrapped(img *image.RGBA, x, y int, text string, col color.RGBA, size float64, weight string, width, lineH, maxLines int) {
+	text = sanitizeReportText(text)
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return
